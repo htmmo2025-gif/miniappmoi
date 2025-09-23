@@ -1,3 +1,4 @@
+// api/tg/verify.js
 import crypto from 'node:crypto'
 import { createClient } from '@supabase/supabase-js'
 
@@ -19,33 +20,39 @@ function isValid(initData) {
 }
 
 export default async (req, res) => {
-  const qs = req.url?.split('?')[1] || ''
-  const initData = new URLSearchParams(qs)
-  if (!isValid(initData)) return res.status(401).send('bad initData')
+  try {
+    const qs = req.url?.split('?')[1] || ''
+    const initData = new URLSearchParams(qs)
 
-  const u = JSON.parse(initData.get('user') || '{}') || {}
-  const ref = initData.get('start_param') || initData.get('startapp') || null
-  const refId = ref && /^\d+$/.test(ref) ? Number(ref) : null
+    if (!isValid(initData)) {
+      console.error('verify: invalid initData')
+      return res.status(401).send('bad initData')
+    }
 
-  // upsert user info vào bảng users
-  await supa.from('users').upsert({
-    id: u.id,                          // primary key
-    telegram_id: u.id,
-    username: u.username || null,
-    first_name: u.first_name || null,
-    last_name:  u.last_name  || null,
-    photo_url:  u.photo_url  || null,
-    // chỉ set referrer lần đầu, tránh overwrite
-    referrer_id: (refId && refId !== u.id) ? refId : null
-  }, { onConflict: 'id' })
+    const u = JSON.parse(initData.get('user') || '{}') || {}
+    const ref = initData.get('start_param') || initData.get('startapp') || null
+    const refId = ref && /^\d+$/.test(ref) ? Number(ref) : null
 
-  // nếu có referrer_id nhưng đã tồn tại giá trị thì không ghi đè
-  if (refId && refId !== u.id) {
-    await supa.rpc('set_referrer_once', { p_user_id: u.id, p_referrer_id: refId })
-      .catch(()=>{}) // optional: tạo function ở dưới
+    // upsert user
+    const { error } = await supa.from('users').upsert({
+      id: u.id,
+      telegram_id: u.id,
+      username: u.username || null,
+      first_name: u.first_name || null,
+      last_name:  u.last_name  || null,
+      photo_url:  u.photo_url  || null,
+      ...(refId && refId !== u.id ? { referrer_id: refId } : {})
+    }, { onConflict: 'id' })
+    if (error) {
+      console.error('verify: supabase upsert error', error)
+      return res.status(500).send('supabase error')
+    }
+
+    // đặt cookie phiên
+    res.setHeader('Set-Cookie', `tg_uid=${u.id}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=86400`)
+    return res.status(204).end()
+  } catch (e) {
+    console.error('verify exception', e)
+    return res.status(500).send('server error')
   }
-
-  // cookie phiên
-  res.setHeader('Set-Cookie', `tg_uid=${u.id}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=86400`)
-  res.status(204).end()
 }
