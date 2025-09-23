@@ -1,15 +1,12 @@
-// api/tg/verify.js
 import crypto from 'node:crypto'
-import { createClient } from '@supabase/supabase-js'
+import { supa } from '../_supa.js'   // <— dùng server client
 
 const BOT_TOKEN = process.env.BOT_TOKEN
-const supa = createClient(process.env.SUPABASE_URL, process.env.SERVICE_ROLE_KEY)
 
 function isValid(initData) {
   const hash = initData.get('hash')
   if (!hash) return false
   initData.delete('hash')
-
   const str = [...initData.entries()]
     .sort(([a],[b]) => a.localeCompare(b))
     .map(([k,v]) => `${k}=${v}`).join('\n')
@@ -23,17 +20,12 @@ export default async (req, res) => {
   try {
     const qs = req.url?.split('?')[1] || ''
     const initData = new URLSearchParams(qs)
-
-    if (!isValid(initData)) {
-      console.error('verify: invalid initData')
-      return res.status(401).send('bad initData')
-    }
+    if (!isValid(initData)) return res.status(401).send('bad initData')
 
     const u = JSON.parse(initData.get('user') || '{}') || {}
     const ref = initData.get('start_param') || initData.get('startapp') || null
     const refId = ref && /^\d+$/.test(ref) ? Number(ref) : null
 
-    // upsert user
     const { error } = await supa.from('users').upsert({
       id: u.id,
       telegram_id: u.id,
@@ -44,15 +36,14 @@ export default async (req, res) => {
       ...(refId && refId !== u.id ? { referrer_id: refId } : {})
     }, { onConflict: 'id' })
     if (error) {
-      console.error('verify: supabase upsert error', error)
+      console.error('verify upsert error', error)
       return res.status(500).send('supabase error')
     }
 
-    // đặt cookie phiên
     res.setHeader('Set-Cookie', `tg_uid=${u.id}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=86400`)
-    return res.status(204).end()
+    res.status(204).end()
   } catch (e) {
     console.error('verify exception', e)
-    return res.status(500).send('server error')
+    res.status(500).send('server error')
   }
 }
