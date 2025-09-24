@@ -26,8 +26,34 @@ async function load() {
   }
 }
 
-function copyText(t) {
-  navigator.clipboard?.writeText(t)
+function showToast(message = 'Đã sao chép!') {
+  const el = document.createElement('div')
+  el.className = 'toast'
+  el.textContent = message
+  document.body.appendChild(el)
+  requestAnimationFrame(() => el.classList.add('show'))
+  setTimeout(() => {
+    el.classList.remove('show')
+    setTimeout(() => el.remove(), 250)
+  }, 1800)
+}
+
+async function copyText(t) {
+  if (!t) return
+  try {
+    await navigator.clipboard?.writeText(t)
+  } catch {
+    // fallback
+    const ta = document.createElement('textarea')
+    ta.value = t
+    document.body.appendChild(ta)
+    ta.select()
+    document.execCommand('copy')
+    ta.remove()
+  }
+  // Haptic (nếu chạy trong Telegram)
+  try { window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('success') } catch {}
+  showToast('Đã sao chép link mời')
 }
 
 function share() {
@@ -72,10 +98,10 @@ onMounted(load)
             <div class="lbl">Link mời</div>
             <div class="row">
               <input class="inp" :value="info.share_link || 'Thiếu BOT_USERNAME'" readonly />
-              <button class="act" @click="copyText(info.share_link)" :disabled="!hasBot">
+              <button class="act" @click="copyText(info.share_link)" :disabled="!hasBot" aria-label="Sao chép">
                 <i class="bi bi-clipboard"></i>
               </button>
-              <button class="act" @click="share" :disabled="!hasBot">
+              <button class="act" @click="share" :disabled="!hasBot" aria-label="Chia sẻ Telegram">
                 <i class="bi bi-telegram"></i>
               </button>
             </div>
@@ -213,6 +239,25 @@ onMounted(load)
 .note{margin-top:10px; padding:10px 12px; border-radius:10px; background:#0e1525; color:#cbd5e1}
 .err{color:#fda4af}
 
-:global(*), :global(*::before), :global(*::after){ box-sizing: border-box }
-:global(html, body, #app){ margin:0; overflow-x:hidden }
+/* ===== Toast (global so với scope) ===== */
+:global(.toast){
+  position: fixed;
+  top: calc(64px + env(safe-area-inset-top));
+  left: 50%;
+  transform: translateX(-50%) translateY(-12px);
+  background: linear-gradient(135deg,#22c55e,#10b981);
+  color:#0b0f1a;
+  padding: 10px 14px;
+  border-radius: 12px;
+  font-weight: 800;
+  font-size: 13px;
+  box-shadow: 0 10px 30px rgba(16,185,129,.35);
+  opacity: 0;
+  z-index: 1000;
+  transition: transform .2s ease, opacity .2s ease;
+}
+:global(.toast.show){
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
 </style>
