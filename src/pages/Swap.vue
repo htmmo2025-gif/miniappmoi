@@ -138,11 +138,8 @@ onMounted(loadProfile)
 
 /* ===== Root & Safe-area ===== */
 .swap-page{
-  --pad: 16px;
-  --maxw: 560px;        /* cùng một chuẩn cho header & content */
-  background:#0b0f1a;
-  color:#e5e7eb;
-  min-height:100vh;
+    --bg:#0b0f1a; --card:#101826; --mut:#9aa3b2; --ring:1px solid rgba(148,163,184,.14);
+    background:var(--bg); color:#e5e7eb; width:100dvw; min-height:100dvh;
 }
 @supports(padding:max(0px)){
   .swap-page{
