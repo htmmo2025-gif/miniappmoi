@@ -2,12 +2,19 @@
 import { ref, onMounted } from 'vue'
 import BottomNav from '../components/BottomNav.vue'
 
-// --- ENV (frontend) ---
-// Chấp nhận mọi format: '15248' | 'task-15248' | 'int-15248' -> '15248'
-const rawBlockId = import.meta.env.VITE_ADSGRAM_BLOCK_ID ?? ''
-const blockId = (String(rawBlockId).match(/\d+/)?.[0] || '').toString()
+/* ================= ENV =================
+   Bạn có thể đặt:
+   - VITE_ADSGRAM_BLOCK_ID = 15248        (tự đổi thành task-15248)
+   - hoặc VITE_ADSGRAM_BLOCK_ID = task-15248 (giữ nguyên)
+   - nếu là interstitial sau này: int-xxxxx
+*/
+const rawId = String(import.meta.env.VITE_ADSGRAM_BLOCK_ID ?? '').trim()
+const blockId =
+  /^(task|int)-\d+$/i.test(rawId) ? rawId :
+  /^\d+$/.test(rawId) ? `task-${rawId}` :
+  '' // sai định dạng -> coi như thiếu
 
-// Chỉ để hiển thị trên UI (server mới là nơi quyết định thưởng thật)
+// Chỉ để hiển thị (server quyết định thưởng thật)
 const rewardUi = Number(import.meta.env.VITE_ADSGRAM_REWARD_HTW ?? 1)
 
 const rewarding = ref(false)
@@ -47,8 +54,8 @@ function loadAdsgramSdk () {
 let adCtrl = null
 async function ensureAdCtrl () {
   await loadAdsgramSdk()
-  if (!blockId) throw new Error('Thiếu VITE_ADSGRAM_BLOCK_ID')
-  if (!adCtrl) adCtrl = window.Adsgram?.init({ blockId }) // blockId là '15248' (string)
+  if (!blockId) throw new Error('Thiếu hoặc sai VITE_ADSGRAM_BLOCK_ID (cần dạng task-XXXXX)')
+  if (!adCtrl) adCtrl = window.Adsgram?.init({ blockId }) // ví dụ: task-15248
   if (!adCtrl) throw new Error('Không khởi tạo được Adsgram')
   return adCtrl
 }
@@ -60,7 +67,7 @@ async function showAd () {
     rewarding.value = true
     await ctrl.show()
 
-    // Người dùng xem xong → server cộng HTW theo process.env.ADSGRAM_REWARD_HTW
+    // Xem xong -> gọi server cộng HTW
     const r = await fetch('/api/tasks/adsgram-reward', {
       method: 'POST',
       credentials: 'include'
@@ -112,7 +119,7 @@ onMounted(loadProfile)
         </button>
 
         <p v-if="!blockId" class="warn">
-          Thiếu <b>VITE_ADSGRAM_BLOCK_ID</b>. Hãy thêm biến môi trường rồi deploy lại.
+          Thiếu <b>VITE_ADSGRAM_BLOCK_ID</b> (hãy đặt <code>task-XXXXX</code> hoặc số <em>XXXXX</em>).
         </p>
         <p v-if="msg" class="note err"><i class="bi bi-exclamation-circle"></i> {{ msg }}</p>
       </section>
