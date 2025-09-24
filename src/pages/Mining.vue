@@ -1,5 +1,6 @@
 <script setup>
 import { ref, onMounted, onUnmounted, computed } from 'vue'
+import BottomNav from '../components/BottomNav.vue'
 
 const state = ref({
   reward: 20,
@@ -86,7 +87,6 @@ onUnmounted(stopTicker)
 <template>
   <div class="page">
     <header class="topbar">
-      <button class="back" @click="$router.go(-1)"><i class="bi bi-arrow-left"></i></button>
       <h1>Mining</h1>
       <span class="spacer"></span>
     </header>
@@ -132,6 +132,7 @@ onUnmounted(stopTicker)
       </section>
     </main>
   </div>
+  <BottomNav/>
 </template>
 
 <style scoped>
@@ -149,10 +150,6 @@ onUnmounted(stopTicker)
   backdrop-filter: blur(8px);
 }
 .topbar h1{margin:0; font:800 20px/1 ui-sans-serif,system-ui}
-.back{
-  width:36px;height:36px;border-radius:50%;border:var(--ring);background:#0e1726;
-  display:grid;place-items:center;color:#cbd5e1;
-}
 .spacer{flex:1}
 
 .wrap{
