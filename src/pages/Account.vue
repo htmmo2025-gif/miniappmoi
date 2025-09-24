@@ -8,7 +8,7 @@ const profile = ref(null)
 const loading = ref(false)
 const errorMsg = ref('')
 
-// Load profile from your server API
+// tải profile từ API server (đọc supabase)
 async function loadProfile() {
   try {
     loading.value = true
@@ -26,36 +26,31 @@ async function loadProfile() {
 const initials = computed(() => {
   const f = profile.value?.first_name?.[0] ?? ''
   const l = profile.value?.last_name?.[0] ?? ''
-  return (f + l || 'U').toUpperCase()
+  const s = (f + l).trim()
+  return (s || 'U').toUpperCase()
 })
-
-function copyUID() {
-  const id = profile.value?.id
-  if (id) {
-    navigator.clipboard?.writeText(String(id))
-    showToast('UID đã được sao chép!')
-  }
-}
 
 function showToast(message) {
   const toast = document.createElement('div')
-  toast.className = 'toast-notification'
+  toast.className = 'toast'
   toast.textContent = message
   document.body.appendChild(toast)
-  
-  setTimeout(() => toast.classList.add('show'), 100)
+  requestAnimationFrame(() => toast.classList.add('show'))
   setTimeout(() => {
     toast.classList.remove('show')
-    setTimeout(() => document.body.removeChild(toast), 300)
-  }, 2000)
+    setTimeout(() => toast.remove(), 250)
+  }, 1600)
 }
 
-function goWithdraw() {
-  router.push({ name: 'withdraw' })
+function copyUID() {
+  const id = profile.value?.id
+  if (!id) return
+  navigator.clipboard?.writeText(String(id))
+  showToast('Đã sao chép UID')
 }
-function goSwap() {
-  router.push({ name: 'swap' })
-}
+
+function goWithdraw() { router.push({ name: 'withdraw' }) }
+function goSwap()     { router.push({ name: 'swap' }) }
 
 function openSupport() {
   const url = 'https://t.me/your_support_channel'
@@ -71,556 +66,264 @@ onMounted(loadProfile)
 
 <template>
   <div class="page">
-    <!-- Status Bar -->
-    <div class="status-bar"></div>
-    
-    <!-- Content -->
-    <div class="content">
-      <!-- Header -->
-      <div class="header">
-        <div class="header-title">Tài khoản</div>
-      </div>
+    <!-- Header -->
+    <header class="top">
+      <h1>Tài khoản</h1>
+    </header>
 
-      <!-- Loading State -->
-      <div v-if="loading" class="loading-state">
-        <div class="loading-spinner"></div>
-        <div class="loading-text">Đang tải...</div>
-      </div>
-
-      <!-- Error State -->
-      <div v-else-if="errorMsg" class="error-state">
-        <i class="bi bi-exclamation-circle error-icon"></i>
-        <div class="error-text">{{ errorMsg }}</div>
-      </div>
-
-      <!-- Main Content -->
-      <div v-else class="main-content">
-        <!-- Profile Section -->
-        <div class="profile-section">
-          <div class="profile-card">
-            <div class="avatar-wrapper">
-              <div class="avatar">{{ initials }}</div>
-              <div class="online-indicator"></div>
-            </div>
-            <div class="profile-info">
-              <h3 class="profile-name">{{ profile?.first_name }} {{ profile?.last_name }}</h3>
-              <div class="uid-container">
-                <span class="uid-text">UID: {{ profile?.id }}</span>
-                <button class="uid-copy" @click="copyUID">
-                  <i class="bi bi-copy"></i>
-                </button>
-              </div>
-              <div v-if="profile?.username" class="username">@{{ profile.username }}</div>
-            </div>
-          </div>
+    <main class="container">
+      <!-- Loading -->
+      <div v-if="loading" class="skeleton">
+        <div class="sk-card sk-user"></div>
+        <div class="sk-grid">
+          <div class="sk-card"></div>
+          <div class="sk-card"></div>
         </div>
-
-        <!-- Balance Display -->
-        <div class="balance-wrapper">
-          <div class="balance-card primary">
-            <div class="balance-content">
-              <div class="balance-label">
-                <i class="bi bi-currency-dollar"></i>
-                VND Balance
-              </div>
-              <div class="balance-amount">
-                {{ (profile?.vnd_balance ?? 0).toLocaleString() }}
-                <span class="currency">VND</span>
-              </div>
-            </div>
-            <div class="balance-bg-pattern"></div>
-          </div>
-        </div>
-
-        <!-- Features Grid -->
-        <div class="features-section">
-          <div class="section-header">
-            <i class="bi bi-grid-3x3-gap"></i>
-            Chức năng
-          </div>
-          
-          <div class="features-grid">
-            <button class="feature-card support-card" @click="openSupport">
-              <div class="feature-icon">
-                <i class="bi bi-headset"></i>
-              </div>
-              <div class="feature-content">
-                <div class="feature-title">Hỗ trợ</div>
-                <div class="feature-subtitle">CSKH Telegram</div>
-              </div>
-              <i class="bi bi-chevron-right feature-arrow"></i>
-            </button>
-
-            <button class="feature-card withdraw-card" @click="goWithdraw">
-              <div class="feature-icon">
-                <i class="bi bi-credit-card-2-back"></i>
-              </div>
-              <div class="feature-content">
-                <div class="feature-title">Rút tiền</div>
-                <div class="feature-subtitle">Rút VND về ngân hàng</div>
-              </div>
-              <i class="bi bi-chevron-right feature-arrow"></i>
-            </button>
-
-            <button class="feature-card swap-card" @click="goSwap">
-              <div class="feature-icon">
-                <i class="bi bi-arrow-repeat"></i>
-              </div>
-              <div class="feature-content">
-                <div class="feature-title">Đổi token</div>
-                <div class="feature-subtitle">HTW → VND</div>
-              </div>
-              <i class="bi bi-chevron-right feature-arrow"></i>
-            </button>
-          </div>
-        </div>
-
-        <!-- HTW Token Section -->
-        <div class="token-section">
-          <div class="token-card">
-            <div class="token-header">
-              <div class="token-icon">
-                <i class="bi bi-gem"></i>
-              </div>
-              <div class="token-info">
-                <div class="token-name">HTW Token</div>
-                <div class="token-balance">{{ (profile?.htw_balance ?? 0).toLocaleString() }} HTW</div>
-              </div>
-            </div>
-          </div>
+        <div class="sk-list">
+          <div class="sk-item"></div>
+          <div class="sk-item"></div>
+          <div class="sk-item"></div>
         </div>
       </div>
-    </div>
 
-    <BottomNav/>
+      <!-- Error -->
+      <div v-else-if="errorMsg" class="error">
+        <i class="bi bi-exclamation-triangle"></i>
+        <p>{{ errorMsg }}</p>
+      </div>
+
+      <!-- Content -->
+      <div v-else class="stack">
+        <!-- User card -->
+        <section class="card user">
+          <div class="avatar-wrap">
+            <span class="avatar">{{ initials }}</span>
+            <span class="online"></span>
+          </div>
+
+          <div class="uinfo">
+            <div class="name">
+              {{ profile?.first_name }} {{ profile?.last_name }}
+            </div>
+            <div class="row">
+              <span class="chip">UID: {{ profile?.id }}</span>
+              <button class="icon-btn" title="Sao chép UID" @click="copyUID">
+                <i class="bi bi-clipboard"></i>
+              </button>
+            </div>
+            <div v-if="profile?.username" class="handle">@{{ profile.username }}</div>
+          </div>
+        </section>
+
+        <!-- Stats: 2 cột cân -->
+        <section class="grid-2">
+          <div class="stat htw">
+            <div class="label">HTW</div>
+            <div class="value">
+              {{ (profile?.htw_balance ?? 0).toLocaleString() }}
+              <span>HTW</span>
+            </div>
+          </div>
+
+          <div class="stat vnd">
+            <div class="label">VND</div>
+            <div class="value">
+              {{ (profile?.vnd_balance ?? 0).toLocaleString() }}
+              <span>VND</span>
+            </div>
+          </div>
+        </section>
+
+        <!-- Features -->
+        <section class="list">
+          <button class="item" @click="openSupport">
+            <span class="ic ic-support"><i class="bi bi-headset"></i></span>
+            <div class="meta">
+              <div class="title">Hỗ trợ</div>
+              <div class="sub">CSKH Telegram</div>
+            </div>
+            <i class="bi bi-chevron-right chev"></i>
+          </button>
+
+          <button class="item" @click="goWithdraw">
+            <span class="ic ic-withdraw"><i class="bi bi-credit-card-2-front"></i></span>
+            <div class="meta">
+              <div class="title">Rút tiền</div>
+              <div class="sub">Rút VND về tài khoản</div>
+            </div>
+            <i class="bi bi-chevron-right chev"></i>
+          </button>
+
+          <button class="item" @click="goSwap">
+            <span class="ic ic-swap"><i class="bi bi-arrow-left-right"></i></span>
+            <div class="meta">
+              <div class="title">Đổi token</div>
+              <div class="sub">HTW → VND</div>
+            </div>
+            <i class="bi bi-chevron-right chev"></i>
+          </button>
+        </section>
+      </div>
+    </main>
+
+    <BottomNav />
   </div>
 </template>
 
 <style scoped>
+/* ====== Theme ====== */
 .page {
-  min-height: 100vh;
-  background: #000000;
-  color: #ffffff;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-}
+  --bg: #0b0f1a;
+  --card: #111827;
+  --card-2: #0f172a;
+  --text: #e5e7eb;
+  --muted: #9ca3af;
+  --ring: 0 0 0 1px rgba(148, 163, 184, .14);
+  --brand: #60a5fa;
+  --accent: #8b5cf6;
+  --green: #10b981;
+  --red: #ef4444;
 
-.status-bar {
-  height: 44px;
-  background: linear-gradient(180deg, rgba(0,0,0,0.9) 0%, transparent 100%);
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  z-index: 100;
-}
-
-.content {
-  padding-top: 44px;
-  padding-bottom: 100px;
+  background: var(--bg);
+  color: var(--text);
   min-height: 100vh;
 }
 
-.header {
-  padding: 20px 24px 0;
-  position: sticky;
-  top: 44px;
-  z-index: 10;
-  background: linear-gradient(180deg, #000000 0%, rgba(0,0,0,0.95) 100%);
-  backdrop-filter: blur(20px);
+/* ====== Layout ====== */
+.top {
+  position: sticky; top: 0; z-index: 10;
+  background: linear-gradient(180deg, rgba(11,15,26,.9), rgba(11,15,26,.6) 80%, transparent);
+  backdrop-filter: blur(8px);
+  padding: 14px 18px 6px;
+}
+.top h1 {
+  font-size: 22px; font-weight: 800; letter-spacing: .2px;
+  margin: 0;
 }
 
-.header-title {
-  font-size: 32px;
-  font-weight: 800;
-  background: linear-gradient(135deg, #ff6b6b, #4ecdc4, #45b7d1);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-  margin-bottom: 10px;
-}
-
-.main-content {
-  padding: 24px;
-  max-width: 428px;
+.container {
+  max-width: 440px;
+  padding: 16px 18px 88px;
   margin: 0 auto;
 }
 
-/* Loading & Error States */
-.loading-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 80px 24px;
-  text-align: center;
+.stack { display: grid; gap: 14px; }
+
+/* ====== Cards / common ====== */
+.card {
+  background: var(--card);
+  border-radius: 16px;
+  padding: 14px;
+  box-shadow: var(--ring);
 }
 
-.loading-spinner {
-  width: 40px;
-  height: 40px;
-  border: 3px solid rgba(255, 107, 107, 0.2);
-  border-top: 3px solid #ff6b6b;
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-  margin-bottom: 16px;
+/* ====== User ====== */
+.user {
+  display: grid; grid-template-columns: 72px 1fr; gap: 12px; align-items: center;
 }
-
-.loading-text {
-  color: #8b8b8b;
-  font-size: 16px;
-}
-
-@keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
-}
-
-.error-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 80px 24px;
-  text-align: center;
-}
-
-.error-icon {
-  font-size: 48px;
-  color: #ff6b6b;
-  margin-bottom: 16px;
-}
-
-.error-text {
-  color: #8b8b8b;
-  font-size: 16px;
-}
-
-/* Profile Section */
-.profile-section {
-  margin-bottom: 32px;
-}
-
-.profile-card {
-  background: linear-gradient(135deg, #1a1a1a 0%, #2a2a2a 100%);
-  border-radius: 24px;
-  padding: 24px;
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  box-shadow: 
-    0 8px 32px rgba(0, 0, 0, 0.5),
-    inset 0 1px 0 rgba(255, 255, 255, 0.1);
-}
-
-.avatar-wrapper {
-  position: relative;
-}
-
+.avatar-wrap { position: relative; width: 72px; height: 72px; }
 .avatar {
-  width: 72px;
-  height: 72px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, #ff6b6b, #4ecdc4);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 24px;
-  font-weight: 900;
-  color: #ffffff;
-  box-shadow: 0 8px 32px rgba(255, 107, 107, 0.3);
+  width: 72px; height: 72px; border-radius: 50%;
+  display: grid; place-items: center;
+  background: linear-gradient(145deg, #1f2937, #0b1220);
+  border: 1px solid rgba(148,163,184,.18);
+  font-weight: 800; font-size: 22px;
 }
-
-.online-indicator {
-  position: absolute;
-  bottom: 4px;
-  right: 4px;
-  width: 16px;
-  height: 16px;
-  background: #00ff88;
-  border: 3px solid #000000;
-  border-radius: 50%;
-  box-shadow: 0 0 10px rgba(0, 255, 136, 0.5);
+.online {
+  position: absolute; right: 4px; bottom: 4px;
+  width: 14px; height: 14px; border-radius: 50%;
+  background: var(--green); border: 2px solid var(--card);
+  box-shadow: 0 0 0 2px rgba(16,185,129,.25);
 }
-
-.profile-info {
-  flex: 1;
+.uinfo .name { font-weight: 700; font-size: 16px; margin-bottom: 4px; }
+.row { display: flex; align-items: center; gap: 8px; }
+.chip {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
+  font-size: 12px; color: var(--muted);
+  background: var(--card-2);
+  padding: 4px 8px; border-radius: 8px; border: 1px solid rgba(148,163,184,.12);
 }
-
-.profile-name {
-  font-size: 20px;
-  font-weight: 700;
-  margin: 0 0 8px 0;
-  color: #ffffff;
+.icon-btn {
+  border: 1px solid rgba(148,163,184,.14);
+  background: transparent; color: var(--text);
+  width: 30px; height: 30px; border-radius: 10px; display: grid; place-items: center;
 }
+.icon-btn:hover { background: rgba(148,163,184,.08); }
+.handle { color: var(--brand); font-size: 13px; margin-top: 4px; }
 
-.uid-container {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 4px;
+/* ====== Stats (2 columns) ====== */
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.stat {
+  border-radius: 16px; padding: 14px;
+  position: relative; overflow: hidden;
+  border: 1px solid rgba(148,163,184,.12);
 }
-
-.uid-text {
-  font-size: 13px;
-  color: #8b8b8b;
-  font-family: 'SF Mono', 'Consolas', monospace;
-  background: rgba(255, 255, 255, 0.05);
-  padding: 4px 8px;
-  border-radius: 6px;
+.stat::after {
+  content:""; position:absolute; inset:-30% -20% auto auto; width:120px; height:120px;
+  background: radial-gradient(closest-side, rgba(255,255,255,.08), transparent 70%);
+  transform: translate(16px,-16px); border-radius: 50%;
 }
+.stat .label { font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+.stat .value { font: 800 20px/1.1 ui-sans-serif, system-ui; }
+.stat .value span { font: 700 12px/1.2 ui-sans-serif; opacity: .8; margin-left: 6px; }
 
-.uid-copy {
-  background: transparent;
-  border: none;
-  color: #4ecdc4;
-  cursor: pointer;
-  padding: 4px;
-  border-radius: 4px;
-  transition: all 0.2s ease;
-}
+.stat.htw { background: linear-gradient(180deg, #1b1530 0%, #151222 100%); }
+.stat.vnd { background: linear-gradient(180deg, #0c2437 0%, #0b1b2b 100%); }
 
-.uid-copy:hover {
-  background: rgba(78, 205, 196, 0.1);
-  transform: scale(1.1);
-}
-
-.username {
-  font-size: 14px;
-  color: #4ecdc4;
-}
-
-/* Balance Section */
-.balance-wrapper {
-  margin-bottom: 32px;
-}
-
-.balance-card {
-  position: relative;
-  background: linear-gradient(135deg, #ff6b6b 0%, #ff8e8e 100%);
-  border-radius: 24px;
-  padding: 24px;
-  overflow: hidden;
-  box-shadow: 
-    0 12px 40px rgba(255, 107, 107, 0.3),
-    0 4px 12px rgba(0, 0, 0, 0.3);
-}
-
-.balance-content {
-  position: relative;
-  z-index: 2;
-}
-
-.balance-label {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 14px;
-  font-weight: 600;
-  color: rgba(255, 255, 255, 0.9);
-  margin-bottom: 8px;
-}
-
-.balance-amount {
-  font-size: 36px;
-  font-weight: 900;
-  color: #ffffff;
-  line-height: 1;
-}
-
-.currency {
-  font-size: 18px;
-  font-weight: 700;
-  opacity: 0.8;
-  margin-left: 8px;
-}
-
-.balance-bg-pattern {
-  position: absolute;
-  top: 0;
-  right: 0;
-  width: 120px;
-  height: 120px;
-  background: radial-gradient(circle, rgba(255, 255, 255, 0.1) 0%, transparent 70%);
-  border-radius: 50%;
-  transform: translate(40px, -40px);
-}
-
-/* Features Section */
-.features-section {
-  margin-bottom: 32px;
-}
-
-.section-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 18px;
-  font-weight: 700;
-  color: #ffffff;
-  margin-bottom: 16px;
-}
-
-.features-grid {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.feature-card {
-  background: linear-gradient(135deg, #1a1a1a 0%, #2a2a2a 100%);
-  border: 1px solid rgba(255, 255, 255, 0.05);
-  border-radius: 20px;
-  padding: 20px;
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  cursor: pointer;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+/* ====== List features ====== */
+.list { display: grid; gap: 10px; }
+.item {
+  display: grid; grid-template-columns: 44px 1fr 18px; align-items: center;
+  gap: 12px; padding: 12px 12px; border-radius: 14px;
+  background: var(--card); border: 1px solid rgba(148,163,184,.12);
   text-align: left;
 }
+.item:hover { background: #0f1a2a; }
+.ic {
+  width: 44px; height: 44px; border-radius: 12px; display:grid; place-items:center;
+  color: #fff; font-size: 18px;
+}
+.ic-support  { background: linear-gradient(145deg, #0ea5e9, #2563eb); }
+.ic-withdraw { background: linear-gradient(145deg, #059669, #10b981); }
+.ic-swap     { background: linear-gradient(145deg, #7c3aed, #8b5cf6); }
 
-.feature-card:hover {
-  background: linear-gradient(135deg, #2a2a2a 0%, #3a3a3a 100%);
-  transform: translateY(-2px);
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
+.meta .title { font-weight: 700; font-size: 14px; }
+.meta .sub   { font-size: 12px; color: var(--muted); margin-top: 2px; }
+.chev { color: var(--muted); }
+
+/* ====== Error ====== */
+.error {
+  display: grid; place-items: center; text-align: center;
+  gap: 8px; padding: 56px 12px; color: var(--muted);
+}
+.error i { font-size: 28px; color: var(--red); }
+
+/* ====== Skeleton ====== */
+.skeleton { display: grid; gap: 14px; }
+.sk-card, .sk-item {
+  background: linear-gradient(90deg, rgba(255,255,255,.06), rgba(255,255,255,.12), rgba(255,255,255,.06));
+  background-size: 200% 100%;
+  animation: shimmer 1.3s infinite;
+  border-radius: 14px; height: 64px;
+}
+.sk-user { height: 90px; }
+.sk-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.sk-list { display: grid; gap: 10px; }
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
 }
 
-.feature-icon {
-  width: 48px;
-  height: 48px;
-  border-radius: 16px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 20px;
+/* ====== Toast ====== */
+:global(.toast) {
+  position: fixed; left:50%; top: 18px; transform: translate(-50%, -18px);
+  background: #111827; color: var(--text); border: 1px solid rgba(148,163,184,.18);
+  padding: 10px 14px; border-radius: 12px; opacity: 0; transition: .25s ease; z-index: 1000;
 }
+:global(.toast.show) { opacity: 1; transform: translate(-50%, 0); }
 
-.support-card .feature-icon {
-  background: linear-gradient(135deg, #00ff88, #00cc70);
-  color: #000000;
-}
-
-.withdraw-card .feature-icon {
-  background: linear-gradient(135deg, #0088ff, #0066cc);
-  color: #ffffff;
-}
-
-.swap-card .feature-icon {
-  background: linear-gradient(135deg, #8844ff, #6633cc);
-  color: #ffffff;
-}
-
-.feature-content {
-  flex: 1;
-}
-
-.feature-title {
-  font-size: 16px;
-  font-weight: 700;
-  color: #ffffff;
-  margin-bottom: 2px;
-}
-
-.feature-subtitle {
-  font-size: 13px;
-  color: #8b8b8b;
-}
-
-.feature-arrow {
-  font-size: 16px;
-  color: #8b8b8b;
-}
-
-/* Token Section */
-.token-section {
-  margin-bottom: 32px;
-}
-
-.token-card {
-  background: linear-gradient(135deg, #1a1a1a 0%, #2a2a2a 100%);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 20px;
-  padding: 20px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
-}
-
-.token-header {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-}
-
-.token-icon {
-  width: 48px;
-  height: 48px;
-  background: linear-gradient(135deg, #ffd700, #ffcc00);
-  border-radius: 16px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 20px;
-  color: #000000;
-}
-
-.token-info {
-  flex: 1;
-}
-
-.token-name {
-  font-size: 16px;
-  font-weight: 700;
-  color: #ffffff;
-  margin-bottom: 4px;
-}
-
-.token-balance {
-  font-size: 18px;
-  font-weight: 600;
-  color: #ffd700;
-}
-
-/* Toast Notification */
-:global(.toast-notification) {
-  position: fixed;
-  top: 70px;
-  left: 50%;
-  transform: translateX(-50%) translateY(-100px);
-  background: linear-gradient(135deg, #00ff88, #00cc70);
-  color: #000000;
-  padding: 12px 20px;
-  border-radius: 12px;
-  font-weight: 600;
-  font-size: 14px;
-  box-shadow: 0 8px 32px rgba(0, 255, 136, 0.3);
-  z-index: 1000;
-  opacity: 0;
-  transition: all 0.3s ease;
-}
-
-:global(.toast-notification.show) {
-  opacity: 1;
-  transform: translateX(-50%) translateY(0);
-}
-
-/* Responsive Design */
-@media (max-width: 428px) {
-  .main-content {
-    padding: 20px;
-  }
-  
-  .profile-card {
-    padding: 20px;
-  }
-  
-  .avatar {
-    width: 64px;
-    height: 64px;
-    font-size: 20px;
-  }
-  
-  .balance-amount {
-    font-size: 28px;
-  }
+/* ====== Responsive ====== */
+@media (max-width: 360px) {
+  .grid-2 { grid-template-columns: 1fr; }
 }
 </style>
