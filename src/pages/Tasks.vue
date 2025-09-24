@@ -3,30 +3,18 @@ import { ref, onMounted } from 'vue'
 import BottomNav from '../components/BottomNav.vue'
 
 /** ========= ENV =========
- * Task block:           VITE_ADSGRAM_BLOCK_ID=15248  hoặc task-15248
- * Interstitial block:   VITE_ADSGRAM_BLOCK_ID=int-12345
+ * Task block:           VITE_ADSGRAM_BLOCK_ID=task-15248   (bắt buộc có tiền tố task-)
+ * Interstitial block:   VITE_ADSGRAM_BLOCK_ID=int-12345    (tùy chọn, vẫn chạy được)
  */
 const rawId = String(import.meta.env.VITE_ADSGRAM_BLOCK_ID ?? '').trim()
-const rewardUi = Number(import.meta.env.VITE_ADSGRAM_REWARD_HTW ?? 1) // chỉ hiển thị
+const isTask = /^task-\d+$/i.test(rawId)
+const isInt  = /^int-\d+$/i.test(rawId)
 
-// nhận biết loại block
-const isInt = /^int-\d+$/i.test(rawId)
-const blockIdTask = /^task-\d+$/i.test(rawId)
-  ? rawId
-  : (/^\d+$/.test(rawId) ? `task-${rawId}` : '')
-const blockIdInt = isInt ? rawId : ''
-
-// SDK URL
-const TASK_SDK_CANDIDATES = [
-  'https://js.adsgram.ai/adsgram-task.min.js',
-  'https://js.adsgram.ai/adsgram.min.js'
-]
-const INT_SDK_URL = 'https://sad.adsgram.ai/js/sad.min.js'
-
-const sdkLoading  = ref(false)
-const rewarding   = ref(false)
-const prof        = ref(null)
-const msg         = ref('')
+const rewardUi   = Number(import.meta.env.VITE_ADSGRAM_REWARD_HTW ?? 1) // chỉ hiển thị
+const sdkLoading = ref(false)
+const rewarding  = ref(false)
+const prof       = ref(null)
+const msg        = ref('')
 
 async function loadProfile () {
   try {
@@ -44,7 +32,8 @@ function toast(t) {
   setTimeout(() => { el.classList.remove('show'); setTimeout(() => el.remove(), 250) }, 1600)
 }
 
-function loadSdkOnce (url) {
+/* ---------- loaders ---------- */
+function loadScriptOnce (url) {
   if ([...document.scripts].some(s => s.src === url)) return Promise.resolve()
   sdkLoading.value = true
   return new Promise((resolve, reject) => {
@@ -56,37 +45,40 @@ function loadSdkOnce (url) {
     document.head.appendChild(s)
   })
 }
-
-async function loadTaskSdk () {
-  let lastErr = null
-  for (const url of TASK_SDK_CANDIDATES) {
-    try {
-      await loadSdkOnce(url)
-      if (window.AdsgramTask || window.Adsgram?.Task) return
-    } catch (e) { lastErr = e }
-  }
-  throw new Error('Không tìm thấy SDK Task (đã thử: ' + TASK_SDK_CANDIDATES.join(', ') + ').')
+function waitFor (cond, timeout = 2000, step = 50) {
+  return new Promise(res => {
+    const t0 = Date.now()
+    const id = setInterval(() => {
+      if (cond()) { clearInterval(id); res(true) }
+      else if (Date.now() - t0 > timeout) { clearInterval(id); res(false) }
+    }, step)
+  })
 }
+
+// SDK URL (đúng theo docs Task + Interstitial)
+const TASK_SDK_URL = 'https://js.adsgram.ai/adsgram.min.js'
+const INT_SDK_URL  = 'https://sad.adsgram.ai/js/sad.min.js'
 
 async function showAd () {
   msg.value = ''
   try {
-    if (blockIdInt) {
-      // Interstitial
-      await loadSdkOnce(INT_SDK_URL)
+    if (isTask) {
+      // ===== TASK SDK theo docs =====
+      await loadScriptOnce(TASK_SDK_URL)
+      const ok = await waitFor(() => window.Adsgram?.Task?.show)
+      if (!ok) throw new Error('Không tìm thấy SDK Task (adsgram.min.js).')
+      rewarding.value = true
+      // blockId phải giữ nguyên "task-XXXXX"
+      await window.Adsgram.Task.show({ blockId: rawId })
+    } else if (isInt) {
+      // ===== INTERSTITIAL (nếu bạn dùng int-XXXXX) =====
+      await loadScriptOnce(INT_SDK_URL)
       if (!window.Adsgram?.init) throw new Error('Không tìm thấy SDK Interstitial (sad.min.js).')
       rewarding.value = true
-      const ctrl = window.Adsgram.init({ blockId: blockIdInt }) // ví dụ: int-12345
+      const ctrl = window.Adsgram.init({ blockId: rawId })
       await ctrl.show()
-    } else if (blockIdTask) {
-      // Task
-      await loadTaskSdk()
-      const api = window.AdsgramTask || window.Adsgram?.Task
-      if (!api?.show) throw new Error('SDK Task đã tải nhưng không có API `show`.')
-      rewarding.value = true
-      await api.show({ blockId: blockIdTask }) // đảm bảo dạng task-XXXXX
     } else {
-      throw new Error('Thiếu/sai VITE_ADSGRAM_BLOCK_ID. Task: 15248 / task-15248. Interstitial: int-XXXXX.')
+      throw new Error('VITE_ADSGRAM_BLOCK_ID sai. Task: task-XXXXX. Interstitial: int-XXXXX.')
     }
 
     // Xem xong → thưởng thật ở server
@@ -129,15 +121,16 @@ onMounted(loadProfile)
           (Có giới hạn thời gian giữa các lượt để chống spam)
         </p>
 
-        <button class="btn" :disabled="rewarding || sdkLoading || !(blockIdTask || blockIdInt)" @click="showAd">
+        <button class="btn"
+                :disabled="rewarding || sdkLoading || !(isTask || isInt)"
+                @click="showAd">
           <i v-if="rewarding" class="bi bi-hourglass-split spin"></i>
           <i v-else class="bi bi-play-circle"></i>
           <span>{{ rewarding ? 'Đang thưởng...' : 'Xem quảng cáo' }}</span>
         </button>
 
-        <p v-if="!(blockIdTask || blockIdInt)" class="warn">
-          Thiếu <b>VITE_ADSGRAM_BLOCK_ID</b> (Task: <code>15248</code> / <code>task-15248</code>;
-          Interstitial: <code>int-XXXXX</code>).
+        <p v-if="!(isTask || isInt)" class="warn">
+          Thiếu <b>VITE_ADSGRAM_BLOCK_ID</b> (Task: <code>task-XXXXX</code>; Interstitial: <code>int-XXXXX</code>).
         </p>
         <p v-if="msg" class="note err"><i class="bi bi-exclamation-circle"></i> {{ msg }}</p>
       </section>
@@ -145,9 +138,8 @@ onMounted(loadProfile)
       <section class="card tip">
         <div class="title"><i class="bi bi-info-circle"></i> Lưu ý</div>
         <ul>
-          <li>Nếu ad không hiện, kiểm tra “Block type” trong Adsgram (Task hay Interstitial).</li>
-          <li>Nếu là <b>Task</b>, bạn có thể đặt ENV là <code>15248</code> hoặc <code>task-15248</code>.</li>
-          <li>Nếu là <b>Interstitial</b>, đặt ENV là <code>int-XXXXX</code>.</li>
+          <li>Block của bạn đang là <b>Task</b> → dùng <code>adsgram.min.js</code> và <code>Adsgram.Task.show</code>.</li>
+          <li>Nếu đổi sang <b>Interstitial</b> thì dùng biến <code>int-XXXXX</code> và SDK <code>sad.min.js</code>.</li>
         </ul>
       </section>
     </main>
@@ -181,7 +173,6 @@ onMounted(loadProfile)
   padding-right:max(16px, env(safe-area-inset-right));
   display:grid; gap:14px;
 }
-
 .card{
   width:100%; margin-inline:0; overflow:hidden;
   background:#0f172a; border:var(--ring); border-radius:14px; padding:16px;
@@ -189,14 +180,12 @@ onMounted(loadProfile)
 }
 .title{display:flex; align-items:center; gap:8px; font-weight:800; margin-bottom:8px}
 .mut{color:var(--mut); font-size:13px; margin:0 0 12px}
-
 .hero{display:flex; gap:12px; align-items:center}
 .hero-ic{width:44px;height:44px;border-radius:12px;display:grid;place-items:center;
   background:linear-gradient(145deg,#22d3ee,#6366f1); color:#fff}
 .lbl{color:#9aa3b2; font-size:12px}
 .amt{font:800 22px/1.1 ui-sans-serif,system-ui}
 .amt span{font:700 12px; opacity:.85; margin-left:6px}
-
 .btn{
   width:100%; padding:14px; border-radius:14px; border:none; color:#0b0f1a; font-weight:900;
   background:linear-gradient(145deg,#fde68a,#60a5fa);
@@ -207,7 +196,6 @@ onMounted(loadProfile)
 .warn{margin-top:10px; color:#fbbf24; font-size:12px}
 .tip ul{margin:6px 0 0 18px; padding:0}
 .tip li{margin:6px 0; color:#9aa3b2; font-size:13px}
-
 :global(.toast){
   position: fixed; top: calc(64px + env(safe-area-inset-top)); left: 50%;
   transform: translateX(-50%) translateY(-10px);
