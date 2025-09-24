@@ -2,23 +2,23 @@
 import { ref, onMounted } from 'vue'
 import BottomNav from '../components/BottomNav.vue'
 
-/* ========= ENV =========
-   Ví dụ:
-   - Task block: VITE_ADSGRAM_BLOCK_ID=task-15248
-   - Interstitial: VITE_ADSGRAM_BLOCK_ID=int-12345
-   - (cũ) Interstitial kiểu số: VITE_ADSGRAM_BLOCK_ID=12345
-*/
+/** ========= ENV =========
+ * Task block:           VITE_ADSGRAM_BLOCK_ID=15248   hoặc task-15248
+ * Interstitial block:   VITE_ADSGRAM_BLOCK_ID=int-12345
+ */
 const rawId = String(import.meta.env.VITE_ADSGRAM_BLOCK_ID ?? '').trim()
 const rewardUi = Number(import.meta.env.VITE_ADSGRAM_REWARD_HTW ?? 1) // chỉ hiển thị
 
-// Phân loại block
-const isTaskBlock = /^task-\d+$/i.test(rawId)
-const isIntBlock  = /^int-\d+$/i.test(rawId)
-const isNumeric   = /^\d+$/.test(rawId)
+// Chuẩn hoá blockId theo loại
+const isInt = /^int-\d+$/i.test(rawId)
+const blockIdTask = /^task-\d+$/i.test(rawId)
+  ? rawId
+  : (/^\d+$/.test(rawId) ? `task-${rawId}` : '')
+const blockIdInt = isInt ? rawId : ''
 
-// URL SDK (sửa theo tài liệu Adsgram của bạn nếu khác)
-const TASK_SDK_URL = 'https://js.adsgram.ai/adsgram-task.min.js'    // cho task-xxxxx
-const INT_SDK_URL  = 'https://sad.adsgram.ai/js/sad.min.js'         // cho int-xxxxx / số
+// SDK URL (theo tài liệu Adsgram)
+const TASK_SDK_URL = 'https://js.adsgram.ai/adsgram-task.min.js' // Task
+const INT_SDK_URL  = 'https://sad.adsgram.ai/js/sad.min.js'      // Interstitial
 
 const sdkLoading  = ref(false)
 const rewarding   = ref(false)
@@ -57,39 +57,30 @@ function loadSdkOnce (url) {
 async function showAd () {
   msg.value = ''
   try {
-    let used = null
-
-    if (isTaskBlock) {
-      // TASK MODE
-      await loadSdkOnce(TASK_SDK_URL)
-      if (!window.AdsgramTask && !window.Adsgram?.Task) {
-        throw new Error('Không tìm thấy SDK Task. Hãy kiểm tra URL SDK Task theo tài liệu Adsgram.')
-      }
-      rewarding.value = true
-      // một số bản SDK expose dưới window.AdsgramTask, số khác dưới window.Adsgram.Task
-      const api = window.AdsgramTask || window.Adsgram?.Task
-      used = 'task'
-      // blockId phải là "task-xxxxx"
-      await api.show({ blockId: rawId })
-    } else if (isIntBlock || isNumeric) {
-      // INTERSTITIAL MODE
+    // Ưu tiên: nếu có blockIdInt -> interstitial, ngược lại dùng task
+    if (blockIdInt) {
+      // Interstitial
       await loadSdkOnce(INT_SDK_URL)
-      if (!window.Adsgram?.init) {
-        throw new Error('Không tìm thấy SDK Interstitial (sad.min.js).')
-      }
+      if (!window.Adsgram?.init) throw new Error('Không tìm thấy SDK Interstitial (sad.min.js).')
       rewarding.value = true
-      const ctrl = window.Adsgram.init({ blockId: isIntBlock ? rawId : String(rawId) })
+      const ctrl = window.Adsgram.init({ blockId: blockIdInt }) // vd: int-12345
       await ctrl.show()
-      used = 'int'
+    } else if (blockIdTask) {
+      // Task
+      await loadSdkOnce(TASK_SDK_URL)
+      const api = window.AdsgramTask || window.Adsgram?.Task
+      if (!api?.show) throw new Error('Không tìm thấy SDK Task (adsgram-task.min.js).')
+      rewarding.value = true
+      await api.show({ blockId: blockIdTask }) // đảm bảo dạng task-XXXXX
     } else {
-      throw new Error('Thiếu/sai VITE_ADSGRAM_BLOCK_ID. Task: task-XXXXX. Interstitial: int-XXXXX hoặc số.')
+      throw new Error('Thiếu/sai VITE_ADSGRAM_BLOCK_ID. Task: 15248 / task-15248. Interstitial: int-XXXXX.')
     }
 
-    // người dùng xem xong → gọi server cộng HTW thật
+    // Xem xong → thưởng thật ở server
     const r = await fetch('/api/tasks/adsgram-reward', { method: 'POST', credentials: 'include' })
     if (!r.ok) throw new Error(await r.text())
-    await loadProfile()
 
+    await loadProfile()
     toast(`+${rewardUi} HTW`)
     try { window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('success') } catch {}
   } catch (e) {
@@ -126,14 +117,15 @@ onMounted(loadProfile)
           (Có giới hạn thời gian giữa các lượt để chống spam)
         </p>
 
-        <button class="btn" :disabled="rewarding || sdkLoading || !rawId" @click="showAd">
+        <button class="btn" :disabled="rewarding || sdkLoading || !(blockIdTask || blockIdInt)" @click="showAd">
           <i v-if="rewarding" class="bi bi-hourglass-split spin"></i>
           <i v-else class="bi bi-play-circle"></i>
           <span>{{ rewarding ? 'Đang thưởng...' : 'Xem quảng cáo' }}</span>
         </button>
 
-        <p v-if="!rawId" class="warn">
-          Thiếu <b>VITE_ADSGRAM_BLOCK_ID</b> (Task: <code>task-XXXXX</code>; Interstitial: <code>int-XXXXX</code> hoặc số).
+        <p v-if="!(blockIdTask || blockIdInt)" class="warn">
+          Thiếu <b>VITE_ADSGRAM_BLOCK_ID</b> (Task: <code>15248</code> / <code>task-15248</code>;
+          Interstitial: <code>int-XXXXX</code>).
         </p>
         <p v-if="msg" class="note err"><i class="bi bi-exclamation-circle"></i> {{ msg }}</p>
       </section>
@@ -141,9 +133,9 @@ onMounted(loadProfile)
       <section class="card tip">
         <div class="title"><i class="bi bi-info-circle"></i> Lưu ý</div>
         <ul>
-          <li>Nếu ad không hiện, kiểm tra lại “Block type” trong Adsgram: <b>Task</b> hay <b>Interstitial</b>.</li>
-          <li>Nếu là <b>Task</b>, giữ nguyên <code>task-XXXXX</code> và dùng đúng SDK Task (đặt URL trong code nếu tài liệu của bạn khác).</li>
-          <li>Nếu là <b>Interstitial</b>, dùng <code>int-XXXXX</code> (hoặc số) với SDK <code>sad.min.js</code>.</li>
+          <li>Nếu ad không hiện, kiểm tra “Block type” của block trong Adsgram (Task hay Interstitial).</li>
+          <li>Nếu là <b>Task</b>, bạn có thể đặt ENV là <code>15248</code> hoặc <code>task-15248</code> (code tự chuẩn hoá).</li>
+          <li>Nếu là <b>Interstitial</b>, đặt ENV là <code>int-XXXXX</code>.</li>
         </ul>
       </section>
     </main>
