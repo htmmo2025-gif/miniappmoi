@@ -2,6 +2,9 @@ import { createApp } from 'vue'
 import App from './App.vue'
 import router from './router'   // <-- dùng router tách riêng
 import './style.css'
+window.Telegram?.WebApp?.ready?.();
+window.Telegram?.WebApp?.expand?.();
+window.Telegram?.WebApp?.disableVerticalSwipes?.();
 
 // (tuỳ chọn) chặn mở ngoài Telegram, cho phép khi ?web=1 để dev
 router.beforeEach((to, from, next) => {
