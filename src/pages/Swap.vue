@@ -4,71 +4,47 @@ import { ref, computed, onMounted } from 'vue'
 const RATE = 3 // 1 HTW = 3 VND
 
 const prof = ref(null)
-const amount = ref('')        // HTW người dùng nhập
+const amount = ref('')
 const busy = ref(false)
 const msg = ref('')
 
-// lấy hồ sơ
-async function loadProfile() {
+async function loadProfile () {
   try {
     const r = await fetch('/api/profile', { credentials: 'include' })
     if (r.ok) prof.value = await r.json()
-  } catch (e) {
-    console.error(e)
-  }
+  } catch (e) { console.error(e) }
 }
 
-// số dư tách riêng cho tiện
 const htwBalance = computed(() => Number(prof.value?.htw_balance ?? 0))
 const vndBalance = computed(() => Number(prof.value?.vnd_balance ?? 0))
-
-// số nhập dạng number
-const amountNum = computed(() => {
+const amountNum  = computed(() => {
   const n = Number(amount.value)
   return Number.isFinite(n) ? n : 0
 })
-
-// VND sẽ nhận
 const vnd = computed(() => Math.max(0, Math.floor(amountNum.value * RATE)))
-
-// điều kiện enable nút
 const canSwap = computed(() =>
-  !busy.value &&
-  amountNum.value > 0 &&
-  amountNum.value <= htwBalance.value
+  !busy.value && amountNum.value > 0 && amountNum.value <= htwBalance.value
 )
 
-// điền tối đa
-function fillMax() {
-  if (!prof.value) return
-  // giới hạn 3 chữ số thập phân cho đẹp
+function fillMax () {
   amount.value = (Math.floor(htwBalance.value * 1000) / 1000).toString()
 }
 
-// gửi đổi
-async function submit() {
+async function submit () {
   if (!canSwap.value) return
-  msg.value = ''
-  busy.value = true
+  msg.value = ''; busy.value = true
   try {
     const r = await fetch('/api/swap', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
-      body: JSON.stringify({
-        amount_htw: amountNum.value,
-        rate: RATE
-      })
+      body: JSON.stringify({ amount_htw: amountNum.value, rate: RATE })
     })
-    if (!r.ok) {
-      const t = await r.text()
-      throw new Error(t || 'Swap failed')
-    }
+    if (!r.ok) throw new Error(await r.text() || 'Swap failed')
     await loadProfile()
     amount.value = ''
     msg.value = 'Đổi thành công!'
   } catch (e) {
-    console.error(e)
     msg.value = 'Đổi thất bại: ' + e.message
   } finally {
     busy.value = false
@@ -80,9 +56,9 @@ onMounted(loadProfile)
 
 <template>
   <div class="swap-page">
-    <!-- Header dùng chung gutter với nội dung -->
+    <!-- HEADER -->
     <header class="topbar">
-      <div class="inner">
+      <div class="container top-inner">
         <button class="icon-btn" @click="$router.back()">
           <i class="bi bi-arrow-left"></i>
         </button>
@@ -94,62 +70,62 @@ onMounted(loadProfile)
       </div>
     </header>
 
-    <!-- Nội dung -->
-    <main v-if="prof" class="shell">
-      <!-- Số dư -->
-      <section class="card wallet">
-        <div class="grid2">
-          <div class="stat htw">
-            <div class="lbl"><i class="bi bi-coin"></i> HTW</div>
-            <div class="val">{{ htwBalance.toLocaleString() }}</div>
+    <!-- CONTENT -->
+    <main class="container main">
+      <section v-if="prof" class="stack">
+        <!-- BALANCE -->
+        <div class="card wallet">
+          <div class="grid2">
+            <div class="stat htw">
+              <div class="lbl"><i class="bi bi-coin"></i> HTW</div>
+              <div class="val">{{ htwBalance.toLocaleString() }}</div>
+            </div>
+            <div class="stat vnd">
+              <div class="lbl"><i class="bi bi-currency-dollar"></i> VND</div>
+              <div class="val">{{ vndBalance.toLocaleString() }}</div>
+            </div>
           </div>
-          <div class="stat vnd">
-            <div class="lbl"><i class="bi bi-currency-dollar"></i> VND</div>
-            <div class="val">{{ vndBalance.toLocaleString() }}</div>
+          <div class="rate">
+            <i class="bi bi-graph-up-arrow"></i>
+            Tỷ giá: <b>1 HTW = {{ RATE }} VND</b>
           </div>
         </div>
-        <div class="rate">
-          <i class="bi bi-graph-up-arrow"></i>
-          Tỷ giá: <b>1 HTW = {{ RATE }} VND</b>
+
+        <!-- FORM -->
+        <div class="card">
+          <label class="flabel"><i class="bi bi-input-cursor-text"></i> Số HTW muốn đổi</label>
+
+          <div class="amount-box">
+            <input
+              v-model="amount"
+              type="number"
+              inputmode="decimal"
+              min="0"
+              step="0.001"
+              placeholder="0.000"
+            />
+            <span class="suf">HTW</span>
+            <button class="pill" type="button" @click="fillMax">Tối đa</button>
+          </div>
+
+          <div class="hint">Sẽ nhận: <b>{{ vnd.toLocaleString() }}</b> VND</div>
+          <div v-if="amountNum > htwBalance" class="err">Số HTW vượt quá số dư.</div>
+
+          <button class="primary" :disabled="!canSwap" @click="submit">
+            <i v-if="busy" class="bi bi-hourglass-split spin"></i>
+            <i v-else class="bi bi-arrow-repeat"></i>
+            <span>{{ busy ? 'Đang xử lý...' : 'Thực hiện đổi' }}</span>
+          </button>
+
+          <div v-if="msg" :class="['msg', msg.includes('thành công') ? 'ok' : 'bad']">
+            <i :class="msg.includes('thành công') ? 'bi bi-check-circle' : 'bi bi-exclamation-triangle'"></i>
+            {{ msg }}
+          </div>
         </div>
       </section>
 
-      <!-- Form -->
-      <section class="card">
-        <label class="flabel"><i class="bi bi-input-cursor-text"></i> Số HTW muốn đổi</label>
-
-        <div class="amount-box">
-          <input
-            v-model="amount"
-            type="number"
-            inputmode="decimal"
-            min="0"
-            step="0.001"
-            placeholder="0.000"
-          />
-          <span class="suf">HTW</span>
-          <button class="pill" type="button" @click="fillMax">Tối đa</button>
-        </div>
-
-        <div class="hint">Sẽ nhận: <b>{{ vnd.toLocaleString() }}</b> VND</div>
-        <div v-if="amountNum > htwBalance" class="err">Số HTW vượt quá số dư.</div>
-
-        <button class="primary" :disabled="!canSwap" @click="submit">
-          <i v-if="busy" class="bi bi-hourglass-split spin"></i>
-          <i v-else class="bi bi-arrow-repeat"></i>
-          <span>{{ busy ? 'Đang xử lý...' : 'Thực hiện đổi' }}</span>
-        </button>
-
-        <div v-if="msg" :class="['msg', msg.includes('thành công') ? 'ok' : 'bad']">
-          <i :class="msg.includes('thành công') ? 'bi bi-check-circle' : 'bi bi-exclamation-triangle'"></i>
-          {{ msg }}
-        </div>
-      </section>
-    </main>
-
-    <!-- Loading -->
-    <main v-else class="shell">
-      <section class="card center">
+      <!-- LOADING -->
+      <section v-else class="card center">
         <i class="bi bi-hourglass-split spin big"></i>
         <div>Đang tải…</div>
       </section>
@@ -160,37 +136,40 @@ onMounted(loadProfile)
 <style scoped>
 @import url('https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css');
 
-/* ====== Layout chống lệch 2 bên (kể cả safe-area) ====== */
+/* ===== Root & Safe-area ===== */
 .swap-page{
-  /* biến cục bộ cho component */
-  --gutter: 16px;
-  --maxw: 560px;
+  --pad: 16px;
+  --maxw: 560px;        /* cùng một chuẩn cho header & content */
   background:#0b0f1a;
   color:#e5e7eb;
   min-height:100vh;
 }
 @supports(padding:max(0px)){
   .swap-page{
-    --gutter-l: max(var(--gutter), env(safe-area-inset-left));
-    --gutter-r: max(var(--gutter), env(safe-area-inset-right));
-    --gutter-t: env(safe-area-inset-top, 0px);
+    --padL: max(var(--pad), env(safe-area-inset-left));
+    --padR: max(var(--pad), env(safe-area-inset-right));
+    --padT: env(safe-area-inset-top, 0px);
   }
 }
 
-/* Header dùng cùng gutter với phần nội dung để không lệch */
-.topbar{
-  position:sticky; top:0; z-index:10;
-  background: linear-gradient(180deg, rgba(11,15,26,.96), rgba(11,15,26,.86) 70%, transparent);
-  backdrop-filter: blur(8px);
-}
-.topbar .inner{
+/* ===== Container dùng CHUNG ===== */
+.container{
   max-width: var(--maxw);
   margin-inline: auto;
-  padding-left: var(--gutter-l, 16px);
-  padding-right: var(--gutter-r, 16px);
-  padding-top: calc(8px + var(--gutter-t, 0px));
-  padding-bottom: 10px;
-  display: flex; align-items: center; gap: 12px;
+  padding-left: var(--padL, 16px);
+  padding-right: var(--padR, 16px);
+}
+
+/* ===== Header ===== */
+.topbar{
+  position:sticky; top:0; z-index:20;
+  background: linear-gradient(180deg, rgba(11,15,26,.96), rgba(11,15,26,.85) 70%, transparent);
+  backdrop-filter: blur(8px);
+}
+.top-inner{
+  padding-top: calc(8px + var(--padT, 0px));
+  padding-bottom: 12px;
+  display:flex; align-items:center; gap:12px;
 }
 .icon-btn{
   width:38px; height:38px;
@@ -203,17 +182,11 @@ onMounted(loadProfile)
 .ttl .sub{ font-size:12px; color:#93a4bd }
 .grow{ flex:1 }
 
-/* Container nội dung: cùng max-width + gutter */
-.shell{
-  max-width: var(--maxw);
-  margin-inline: auto;
-  padding-left: var(--gutter-l, 16px);
-  padding-right: var(--gutter-r, 16px);
-  padding-bottom: 20px;
-  display: grid; gap: 16px;
-}
+/* ===== Main wrapper (giữ cùng chiều ngang với header) ===== */
+.main{ padding-top: 12px; padding-bottom: 20px }
+.stack{ display:grid; gap:16px }
 
-/* Cards */
+/* ===== Cards ===== */
 .card{
   border:1px solid rgba(148,163,184,.16);
   background: linear-gradient(180deg, rgba(17,24,39,.82), rgba(15,23,42,.76));
@@ -223,7 +196,7 @@ onMounted(loadProfile)
 .card.center{ display:grid; place-items:center; gap:10px; padding:28px }
 .big{ font-size:38px }
 
-/* Wallet stats */
+/* Wallet */
 .grid2{ display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:10px }
 .stat{
   padding:14px; border-radius:14px;
@@ -274,6 +247,6 @@ onMounted(loadProfile)
   margin-top:10px; padding:10px 12px; border-radius:12px;
   font-size:13px; font-weight:700; display:flex; gap:8px; align-items:center
 }
-.msg.ok{ background:rgba(34,197,94,.12); color:#34d399; border:1px solid rgba(34,197,94,.35) }
+.msg.ok{  background:rgba(34,197,94,.12); color:#34d399; border:1px solid rgba(34,197,94,.35) }
 .msg.bad{ background:rgba(239,68,68,.12); color:#f87171; border:1px solid rgba(239,68,68,.35) }
 </style>
