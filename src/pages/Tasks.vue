@@ -3,8 +3,12 @@ import { ref, onMounted } from 'vue'
 import BottomNav from '../components/BottomNav.vue'
 
 // --- ENV (frontend) ---
-const blockId  = import.meta.env.VITE_ADSGRAM_BLOCK_ID || ''
-const rewardUi = Number(import.meta.env.VITE_ADSGRAM_REWARD_HTW ?? 1) // chỉ để hiển thị trên UI
+// Chấp nhận mọi format: '15248' | 'task-15248' | 'int-15248' -> '15248'
+const rawBlockId = import.meta.env.VITE_ADSGRAM_BLOCK_ID ?? ''
+const blockId = (String(rawBlockId).match(/\d+/)?.[0] || '').toString()
+
+// Chỉ để hiển thị trên UI (server mới là nơi quyết định thưởng thật)
+const rewardUi = Number(import.meta.env.VITE_ADSGRAM_REWARD_HTW ?? 1)
 
 const rewarding = ref(false)
 const loadingSdk = ref(false)
@@ -44,7 +48,7 @@ let adCtrl = null
 async function ensureAdCtrl () {
   await loadAdsgramSdk()
   if (!blockId) throw new Error('Thiếu VITE_ADSGRAM_BLOCK_ID')
-  if (!adCtrl) adCtrl = window.Adsgram?.init({ blockId })
+  if (!adCtrl) adCtrl = window.Adsgram?.init({ blockId }) // blockId là '15248' (string)
   if (!adCtrl) throw new Error('Không khởi tạo được Adsgram')
   return adCtrl
 }
