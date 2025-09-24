@@ -12,11 +12,7 @@ const router = useRouter()
       class="tab-button"
     >
       <div class="icon">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M12 2L13.09 8.26L20 9L13.09 9.74L12 16L10.91 9.74L4 9L10.91 8.26L12 2Z"/>
-          <path d="M8 21L8.5 18.5L11 18L8.5 17.5L8 15L7.5 17.5L5 18L7.5 18.5L8 21Z"/>
-          <path d="M19 15L19.5 13.5L21 13L19.5 12.5L19 11L18.5 12.5L17 13L18.5 13.5L19 15Z"/>
-        </svg>
+        <i class="bi bi-gem"></i>
       </div>
       <span class="label">Mining</span>
     </button>
@@ -27,11 +23,7 @@ const router = useRouter()
       class="tab-button"
     >
       <div class="icon">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-          <path d="M14 2v6h6"/>
-          <path d="M9 15l2 2 4-4"/>
-        </svg>
+        <i class="bi bi-list-check"></i>
       </div>
       <span class="label">Tasks</span>
     </button>
@@ -42,12 +34,7 @@ const router = useRouter()
       class="tab-button"
     >
       <div class="icon">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
-          <circle cx="9" cy="7" r="4"/>
-          <path d="M22 21v-2a4 4 0 0 0-3-3.87"/>
-          <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
-        </svg>
+        <i class="bi bi-people"></i>
       </div>
       <span class="label">Invite</span>
     </button>
@@ -58,10 +45,7 @@ const router = useRouter()
       class="tab-button"
     >
       <div class="icon">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
-          <circle cx="12" cy="7" r="4"/>
-        </svg>
+        <i class="bi bi-person-circle"></i>
       </div>
       <span class="label">Account</span>
     </button>
@@ -129,8 +113,7 @@ const router = useRouter()
 }
 
 .icon {
-  width: 24px;
-  height: 24px;
+  font-size: 20px;
   transition: all 0.3s ease;
   color: #6b7280;
   display: flex;

@@ -8,7 +8,7 @@ import Tasks from './pages/Tasks.vue'
 import Invite from './pages/Invite.vue'
 import Account from './pages/Account.vue'
 import ErrorPage from './pages/Error.vue'
-
+import 'bootstrap-icons/font/bootstrap-icons.css'
 const routes = [
   { path: '/', component: Loading },
   { path: '/mining', component: Mining },
