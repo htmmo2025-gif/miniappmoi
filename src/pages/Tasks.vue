@@ -3,22 +3,25 @@ import { ref, onMounted } from 'vue'
 import BottomNav from '../components/BottomNav.vue'
 
 /** ========= ENV =========
- * Task block:           VITE_ADSGRAM_BLOCK_ID=15248   hoặc task-15248
+ * Task block:           VITE_ADSGRAM_BLOCK_ID=15248  hoặc task-15248
  * Interstitial block:   VITE_ADSGRAM_BLOCK_ID=int-12345
  */
 const rawId = String(import.meta.env.VITE_ADSGRAM_BLOCK_ID ?? '').trim()
 const rewardUi = Number(import.meta.env.VITE_ADSGRAM_REWARD_HTW ?? 1) // chỉ hiển thị
 
-// Chuẩn hoá blockId theo loại
+// nhận biết loại block
 const isInt = /^int-\d+$/i.test(rawId)
 const blockIdTask = /^task-\d+$/i.test(rawId)
   ? rawId
   : (/^\d+$/.test(rawId) ? `task-${rawId}` : '')
 const blockIdInt = isInt ? rawId : ''
 
-// SDK URL (theo tài liệu Adsgram)
-const TASK_SDK_URL = 'https://js.adsgram.ai/adsgram-task.min.js' // Task
-const INT_SDK_URL  = 'https://sad.adsgram.ai/js/sad.min.js'      // Interstitial
+// SDK URL
+const TASK_SDK_CANDIDATES = [
+  'https://js.adsgram.ai/adsgram-task.min.js',
+  'https://js.adsgram.ai/adsgram.min.js'
+]
+const INT_SDK_URL = 'https://sad.adsgram.ai/js/sad.min.js'
 
 const sdkLoading  = ref(false)
 const rewarding   = ref(false)
@@ -54,22 +57,32 @@ function loadSdkOnce (url) {
   })
 }
 
+async function loadTaskSdk () {
+  let lastErr = null
+  for (const url of TASK_SDK_CANDIDATES) {
+    try {
+      await loadSdkOnce(url)
+      if (window.AdsgramTask || window.Adsgram?.Task) return
+    } catch (e) { lastErr = e }
+  }
+  throw new Error('Không tìm thấy SDK Task (đã thử: ' + TASK_SDK_CANDIDATES.join(', ') + ').')
+}
+
 async function showAd () {
   msg.value = ''
   try {
-    // Ưu tiên: nếu có blockIdInt -> interstitial, ngược lại dùng task
     if (blockIdInt) {
       // Interstitial
       await loadSdkOnce(INT_SDK_URL)
       if (!window.Adsgram?.init) throw new Error('Không tìm thấy SDK Interstitial (sad.min.js).')
       rewarding.value = true
-      const ctrl = window.Adsgram.init({ blockId: blockIdInt }) // vd: int-12345
+      const ctrl = window.Adsgram.init({ blockId: blockIdInt }) // ví dụ: int-12345
       await ctrl.show()
     } else if (blockIdTask) {
       // Task
-      await loadSdkOnce(TASK_SDK_URL)
+      await loadTaskSdk()
       const api = window.AdsgramTask || window.Adsgram?.Task
-      if (!api?.show) throw new Error('Không tìm thấy SDK Task (adsgram-task.min.js).')
+      if (!api?.show) throw new Error('SDK Task đã tải nhưng không có API `show`.')
       rewarding.value = true
       await api.show({ blockId: blockIdTask }) // đảm bảo dạng task-XXXXX
     } else {
@@ -79,7 +92,6 @@ async function showAd () {
     // Xem xong → thưởng thật ở server
     const r = await fetch('/api/tasks/adsgram-reward', { method: 'POST', credentials: 'include' })
     if (!r.ok) throw new Error(await r.text())
-
     await loadProfile()
     toast(`+${rewardUi} HTW`)
     try { window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('success') } catch {}
@@ -133,8 +145,8 @@ onMounted(loadProfile)
       <section class="card tip">
         <div class="title"><i class="bi bi-info-circle"></i> Lưu ý</div>
         <ul>
-          <li>Nếu ad không hiện, kiểm tra “Block type” của block trong Adsgram (Task hay Interstitial).</li>
-          <li>Nếu là <b>Task</b>, bạn có thể đặt ENV là <code>15248</code> hoặc <code>task-15248</code> (code tự chuẩn hoá).</li>
+          <li>Nếu ad không hiện, kiểm tra “Block type” trong Adsgram (Task hay Interstitial).</li>
+          <li>Nếu là <b>Task</b>, bạn có thể đặt ENV là <code>15248</code> hoặc <code>task-15248</code>.</li>
           <li>Nếu là <b>Interstitial</b>, đặt ENV là <code>int-XXXXX</code>.</li>
         </ul>
       </section>
