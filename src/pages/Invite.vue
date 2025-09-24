@@ -11,4 +11,5 @@ const link = location.origin + '/?startapp=' + (tg?.initDataUnsafe?.user?.id || 
     </div>
   </div>
   <component is="../components/BottomNav.vue"/>
+  <BottomNav/>
 </template>
