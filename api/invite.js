@@ -18,7 +18,7 @@ export default async function handler(req, res) {
     // danh sách F1
     const { data: list, error } = await supa
       .from('users')
-      .select('id, username, first_name, last_name, photo_url,commission_total')
+      .select('id, username, first_name, last_name, photo_url')
       .eq('referrer_id', uid)
       .order('id', { ascending: false });
 
