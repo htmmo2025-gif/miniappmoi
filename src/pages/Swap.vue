@@ -1,51 +1,75 @@
 <script setup>
-import { ref, onMounted, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 
-/** Tỷ giá cố định */
-const RATE = 3
+const RATE = 3 // 1 HTW = 3 VND
 
 const prof = ref(null)
-const amount = ref('')
-const msg = ref('')
+const amount = ref('')        // HTW người dùng nhập
 const busy = ref(false)
+const msg = ref('')
 
-async function loadProfile () {
-  const r = await fetch('/api/profile', { credentials: 'include' })
-  if (r.ok) prof.value = await r.json()
+// lấy hồ sơ
+async function loadProfile() {
+  try {
+    const r = await fetch('/api/profile', { credentials: 'include' })
+    if (r.ok) prof.value = await r.json()
+  } catch (e) {
+    console.error(e)
+  }
 }
 
+// số dư tách riêng cho tiện
 const htwBalance = computed(() => Number(prof.value?.htw_balance ?? 0))
 const vndBalance = computed(() => Number(prof.value?.vnd_balance ?? 0))
-const amountNum  = computed(() => Number.isFinite(Number(amount.value)) ? Number(amount.value) : 0)
-const vnd        = computed(() => Math.floor(amountNum.value * RATE))
 
-const canSwap = computed(() => amountNum.value > 0 && amountNum.value <= htwBalance.value && !busy.value)
+// số nhập dạng number
+const amountNum = computed(() => {
+  const n = Number(amount.value)
+  return Number.isFinite(n) ? n : 0
+})
 
-function fillMax () {
-  const n = Math.max(0, htwBalance.value)
-  amount.value = (Math.floor(n * 1000) / 1000).toString()
+// VND sẽ nhận
+const vnd = computed(() => Math.max(0, Math.floor(amountNum.value * RATE)))
+
+// điều kiện enable nút
+const canSwap = computed(() =>
+  !busy.value &&
+  amountNum.value > 0 &&
+  amountNum.value <= htwBalance.value
+)
+
+// điền tối đa
+function fillMax() {
+  if (!prof.value) return
+  // giới hạn 3 chữ số thập phân cho đẹp
+  amount.value = (Math.floor(htwBalance.value * 1000) / 1000).toString()
 }
 
-async function submit () {
+// gửi đổi
+async function submit() {
+  if (!canSwap.value) return
   msg.value = ''
-  if (!canSwap.value) {
-    msg.value = amountNum.value > htwBalance.value ? 'Số HTW vượt quá số dư.' : 'Số HTW không hợp lệ.'
-    return
-  }
+  busy.value = true
   try {
-    busy.value = true
     const r = await fetch('/api/swap', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
-      body: JSON.stringify({ amount_htw: amountNum.value, rate: RATE })
+      body: JSON.stringify({
+        amount_htw: amountNum.value,
+        rate: RATE
+      })
     })
-    if (!r.ok) throw new Error(await r.text())
+    if (!r.ok) {
+      const t = await r.text()
+      throw new Error(t || 'Swap failed')
+    }
     await loadProfile()
     amount.value = ''
     msg.value = 'Đổi thành công!'
   } catch (e) {
-    msg.value = 'Đổi thất bại: ' + (e.message || 'Lỗi không xác định')
+    console.error(e)
+    msg.value = 'Đổi thất bại: ' + e.message
   } finally {
     busy.value = false
   }
@@ -55,49 +79,60 @@ onMounted(loadProfile)
 </script>
 
 <template>
-  <div class="page">
-    <!-- Topbar full-bleed -->
-    <div class="topbar">
-      <!-- Inner = container => mọi thứ căn đều 2 bên -->
-      <div class="tb-inner">
-        <button class="icon-btn" @click="$router.back()"><i class="bi bi-arrow-left"></i></button>
-        <div class="top-title">
-          <div class="tt">Đổi token</div>
+  <div class="swap-page">
+    <!-- Header dùng chung gutter với nội dung -->
+    <header class="topbar">
+      <div class="inner">
+        <button class="icon-btn" @click="$router.back()">
+          <i class="bi bi-arrow-left"></i>
+        </button>
+        <div class="ttl">
+          <div class="title">Đổi token</div>
           <div class="sub">HTW → VND</div>
         </div>
-        <div class="spacer"></div>
+        <div class="grow"></div>
       </div>
-    </div>
+    </header>
 
-    <!-- Nội dung trong 1 container chung -->
-    <div class="container" v-if="prof">
-      <!-- ví -->
-      <div class="card wallet">
-        <div class="row2">
+    <!-- Nội dung -->
+    <main v-if="prof" class="shell">
+      <!-- Số dư -->
+      <section class="card wallet">
+        <div class="grid2">
           <div class="stat htw">
-            <div class="label"><i class="bi bi-coin"></i> HTW</div>
-            <div class="value">{{ htwBalance.toLocaleString() }}</div>
+            <div class="lbl"><i class="bi bi-coin"></i> HTW</div>
+            <div class="val">{{ htwBalance.toLocaleString() }}</div>
           </div>
           <div class="stat vnd">
-            <div class="label"><i class="bi bi-currency-dollar"></i> VND</div>
-            <div class="value">{{ vndBalance.toLocaleString() }}</div>
+            <div class="lbl"><i class="bi bi-currency-dollar"></i> VND</div>
+            <div class="val">{{ vndBalance.toLocaleString() }}</div>
           </div>
         </div>
-        <div class="rate"><i class="bi bi-graph-up-arrow"></i> Tỷ giá: <b>1 HTW = {{ RATE }} VND</b></div>
-      </div>
+        <div class="rate">
+          <i class="bi bi-graph-up-arrow"></i>
+          Tỷ giá: <b>1 HTW = {{ RATE }} VND</b>
+        </div>
+      </section>
 
-      <!-- swap -->
-      <div class="card">
-        <div class="field">
-          <label class="flabel"><i class="bi bi-input-cursor-text"></i> Số HTW muốn đổi</label>
-          <div class="amount-box">
-            <input v-model="amount" type="number" inputmode="decimal" min="0" step="0.001" placeholder="0.000" />
-            <span class="suffix">HTW</span>
-            <button class="pill" @click="fillMax" type="button">Tối đa</button>
-          </div>
-          <div class="hint">Sẽ nhận: <b>{{ vnd.toLocaleString() }}</b> VND</div>
-          <div v-if="amountNum > htwBalance" class="err">Số HTW vượt quá số dư.</div>
+      <!-- Form -->
+      <section class="card">
+        <label class="flabel"><i class="bi bi-input-cursor-text"></i> Số HTW muốn đổi</label>
+
+        <div class="amount-box">
+          <input
+            v-model="amount"
+            type="number"
+            inputmode="decimal"
+            min="0"
+            step="0.001"
+            placeholder="0.000"
+          />
+          <span class="suf">HTW</span>
+          <button class="pill" type="button" @click="fillMax">Tối đa</button>
         </div>
+
+        <div class="hint">Sẽ nhận: <b>{{ vnd.toLocaleString() }}</b> VND</div>
+        <div v-if="amountNum > htwBalance" class="err">Số HTW vượt quá số dư.</div>
 
         <button class="primary" :disabled="!canSwap" @click="submit">
           <i v-if="busy" class="bi bi-hourglass-split spin"></i>
@@ -109,121 +144,136 @@ onMounted(loadProfile)
           <i :class="msg.includes('thành công') ? 'bi bi-check-circle' : 'bi bi-exclamation-triangle'"></i>
           {{ msg }}
         </div>
-      </div>
-    </div>
+      </section>
+    </main>
 
-    <div class="container" v-else>
-      <div class="card center">
+    <!-- Loading -->
+    <main v-else class="shell">
+      <section class="card center">
         <i class="bi bi-hourglass-split spin big"></i>
-        <div>Đang tải thông tin…</div>
-      </div>
-    </div>
+        <div>Đang tải…</div>
+      </section>
+    </main>
   </div>
 </template>
 
 <style scoped>
 @import url('https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css');
 
-:global(*), :global(*::before), :global(*::after){ box-sizing:border-box }
-:global(html, body, #app){ margin:0; background:#0b0f1a; color:#e5e7eb }
-
-/* ===== Khung căn đều 2 bên (container dùng chung) ===== */
-:root{ --pad:16px; }
+/* ====== Layout chống lệch 2 bên (kể cả safe-area) ====== */
+.swap-page{
+  /* biến cục bộ cho component */
+  --gutter: 16px;
+  --maxw: 560px;
+  background:#0b0f1a;
+  color:#e5e7eb;
+  min-height:100vh;
+}
 @supports(padding:max(0px)){
-  :root{
-    --pad-l: max(16px, env(safe-area-inset-left));
-    --pad-r: max(16px, env(safe-area-inset-right));
+  .swap-page{
+    --gutter-l: max(var(--gutter), env(safe-area-inset-left));
+    --gutter-r: max(var(--gutter), env(safe-area-inset-right));
+    --gutter-t: env(safe-area-inset-top, 0px);
   }
 }
-.container{
-  width:100%;
-  max-width:560px;          /* cố định bề rộng tối đa -> không bị lệch trên máy rộng */
-  margin-inline:auto;       /* căn giữa */
-  padding-left: var(--pad-l, var(--pad));
-  padding-right: var(--pad-r, var(--pad));
-  display:grid; gap:14px;
-  padding-bottom: calc(20px + env(safe-area-inset-bottom, 0px));
-}
 
-/* ===== Trang & Topbar ===== */
-.page{ min-height:100vh; background: radial-gradient(1200px 600px at 10% -10%, #10223a 0%, transparent 60%) #0b0f1a; }
-
+/* Header dùng cùng gutter với phần nội dung để không lệch */
 .topbar{
   position:sticky; top:0; z-index:10;
-  background: linear-gradient(180deg, rgba(11,15,26,.96), rgba(11,15,26,.75) 65%, transparent);
+  background: linear-gradient(180deg, rgba(11,15,26,.96), rgba(11,15,26,.86) 70%, transparent);
   backdrop-filter: blur(8px);
 }
-.tb-inner{
-  max-width:560px; margin:0 auto;
-  padding-top: calc(10px + env(safe-area-inset-top, 0px));
+.topbar .inner{
+  max-width: var(--maxw);
+  margin-inline: auto;
+  padding-left: var(--gutter-l, 16px);
+  padding-right: var(--gutter-r, 16px);
+  padding-top: calc(8px + var(--gutter-t, 0px));
   padding-bottom: 10px;
-  padding-left: var(--pad-l, var(--pad));
-  padding-right: var(--pad-r, var(--pad));
-  display:flex; align-items:center; gap:12px;
+  display: flex; align-items: center; gap: 12px;
 }
 .icon-btn{
-  width:38px; height:38px; border-radius:12px;
+  width:38px; height:38px;
+  border-radius:12px;
   border:1px solid rgba(148,163,184,.18);
-  background: rgba(148,163,184,.08); color:#e5e7eb;
-  display:grid; place-items:center; font-size:18px;
+  background:rgba(148,163,184,.08);
+  color:#e5e7eb; display:grid; place-items:center; font-size:18px;
 }
-.top-title .tt{ font-weight:800 }
-.top-title .sub{ font-size:12px; color:#93a4bd }
-.spacer{ flex:1 }
+.ttl .title{ font-weight:800; line-height:1.1 }
+.ttl .sub{ font-size:12px; color:#93a4bd }
+.grow{ flex:1 }
 
-/* ===== Card & layout ===== */
+/* Container nội dung: cùng max-width + gutter */
+.shell{
+  max-width: var(--maxw);
+  margin-inline: auto;
+  padding-left: var(--gutter-l, 16px);
+  padding-right: var(--gutter-r, 16px);
+  padding-bottom: 20px;
+  display: grid; gap: 16px;
+}
+
+/* Cards */
 .card{
-  width:100%; border-radius:18px; overflow:hidden;
   border:1px solid rgba(148,163,184,.16);
   background: linear-gradient(180deg, rgba(17,24,39,.82), rgba(15,23,42,.76));
-  box-shadow: 0 10px 30px rgba(2,8,23,.35);
-  padding:16px;
+  border-radius:18px; padding:16px;
+  box-shadow:0 10px 30px rgba(2,8,23,.35);
 }
 .card.center{ display:grid; place-items:center; gap:10px; padding:28px }
+.big{ font-size:38px }
 
-.wallet .row2{ display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:10px }
-.stat{ padding:14px; border-radius:14px; background: linear-gradient(180deg, rgba(241,245,249,.03), rgba(241,245,249,.01)); border:1px solid rgba(148,163,184,.16) }
-.stat .label{ display:flex; align-items:center; gap:8px; color:#99a7be; font-size:13px }
-.stat .value{ font-size:20px; font-weight:800 }
-.stat.htw .value{ color:#fde68a }  .stat.vnd .value{ color:#a5b4fc }
-.wallet .rate{ margin-top:6px; font-size:12px; color:#97a6c4; display:flex; align-items:center; gap:6px }
+/* Wallet stats */
+.grid2{ display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:10px }
+.stat{
+  padding:14px; border-radius:14px;
+  background:rgba(241,245,249,.03);
+  border:1px solid rgba(148,163,184,.16)
+}
+.stat .lbl{ display:flex; align-items:center; gap:8px; color:#99a7be; font-size:13px }
+.stat .val{ font-size:20px; font-weight:800 }
+.stat.htw .val{ color:#fde68a }
+.stat.vnd .val{ color:#a5b4fc }
+.rate{ margin-top:6px; font-size:12px; color:#97a6c4; display:flex; align-items:center; gap:6px }
 
-/* ===== Form ===== */
-.field{ display:grid; gap:8px; margin-bottom:12px }
-.flabel{ display:flex; gap:8px; align-items:center; color:#cbd5e1; font-weight:600; font-size:14px }
+/* Form */
+.flabel{ display:flex; gap:8px; align-items:center; color:#cbd5e1; font-weight:600; font-size:14px; margin-bottom:8px }
 .amount-box{
   position:relative; display:flex; align-items:center; gap:8px;
-  background: rgba(241,245,249,.04);
+  background:rgba(241,245,249,.04);
   border:1.5px solid rgba(148,163,184,.22);
-  border-radius:14px; padding:10px 12px;
+  border-radius:14px; padding:10px 12px; margin-bottom:8px
 }
 .amount-box input{
-  flex:1; background:transparent; border:0; outline:none; color:#e5e7eb;
-  font-size:18px; font-weight:700;
+  flex:1; background:transparent; border:0; outline:none;
+  color:#e5e7eb; font-size:18px; font-weight:700;
 }
-.amount-box .suffix{ color:#9aa8c2; font-weight:700 }
-.amount-box .pill{
-  border:1px solid rgba(148,163,184,.25); background: rgba(148,163,184,.08);
-  color:#cbd5e1; padding:6px 10px; border-radius:12px; font-size:12px; font-weight:700;
+.amount-box .suf{ color:#9aa8c2; font-weight:700 }
+.pill{
+  border:1px solid rgba(148,163,184,.25);
+  background:rgba(148,163,184,.08);
+  color:#cbd5e1; padding:6px 10px;
+  border-radius:12px; font-size:12px; font-weight:700
 }
 .hint{ font-size:12px; color:#8ba3c7 }
-.err{ font-size:12px; color:#fca5a5 }
+.err{ font-size:12px; color:#fca5a5; margin-top:4px }
 
-/* ===== Button & message ===== */
+/* Submit */
 .primary{
   width:100%; display:flex; align-items:center; justify-content:center; gap:8px;
   border:0; border-radius:14px; padding:12px 16px;
-  color:#0b0f1a; font-weight:800;
-  background: linear-gradient(90deg, #fde68a, #60a5fa);
-  box-shadow: 0 10px 30px rgba(6,182,212,.22);
+  color:#0b0f1a; font-weight:800; margin-top:10px;
+  background:linear-gradient(90deg, #fde68a, #60a5fa);
+  box-shadow:0 10px 30px rgba(6,182,212,.22)
 }
 .primary:disabled{ opacity:.5 }
-.spin{ animation:spin 1s linear infinite } @keyframes spin{ to{ transform: rotate(360deg)} }
+.spin{ animation:spin 1s linear infinite } @keyframes spin{ to{ transform:rotate(360deg) } }
 
-.msg{ margin-top:10px; padding:10px 12px; border-radius:12px; font-size:13px; font-weight:700; display:flex; align-items:center; gap:8px }
-.msg.ok { background: rgba(34,197,94,.12); color:#34d399; border:1px solid rgba(34,197,94,.35) }
-.msg.bad{ background: rgba(239,68,68,.12); color:#f87171; border:1px solid rgba(239,68,68,.35) }
-
-/* nhỏ hơn 360px */
-@media (max-width:360px){ .stat .value{ font-size:18px } }
+/* Message */
+.msg{
+  margin-top:10px; padding:10px 12px; border-radius:12px;
+  font-size:13px; font-weight:700; display:flex; gap:8px; align-items:center
+}
+.msg.ok{ background:rgba(34,197,94,.12); color:#34d399; border:1px solid rgba(34,197,94,.35) }
+.msg.bad{ background:rgba(239,68,68,.12); color:#f87171; border:1px solid rgba(239,68,68,.35) }
 </style>
