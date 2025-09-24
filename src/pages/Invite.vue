@@ -102,7 +102,7 @@ onMounted(() => {
           <div class="link">
             <div class="lbl">Link mời</div>
             <div class="row">
-              <input class="inp" :value="info.share_link || 'Thiếu BOT_USERNAME'" readonly />
+              <input class="inp" :value="info.share_link || 'Đang loading...'" readonly />
               <button class="act" @click="copyText(info.share_link)" :disabled="!hasBot" aria-label="Sao chép">
                 <i class="bi bi-clipboard"></i>
               </button>
@@ -111,7 +111,7 @@ onMounted(() => {
               </button>
             </div>
             <p v-if="!hasBot" class="warn">
-              Chưa cấu hình <b>BOT_USERNAME</b> trong Vercel nên không tạo được link mời.
+              Đang loading...
             </p>
           </div>
         </div>
