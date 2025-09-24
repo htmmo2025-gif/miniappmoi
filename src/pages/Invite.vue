@@ -8,7 +8,8 @@ const info = ref({
   uid: null,
   share_link: '',
   direct_count: 0,
-  referrals: []
+  referrals: [],
+  commission_total: 0, // sẽ là 0 nếu API chưa trả trường này
 })
 
 async function load() {
@@ -70,7 +71,11 @@ function share() {
 
 const hasBot = computed(() => !!info.value.share_link)
 
-onMounted(load)
+onMounted(() => {
+  // mở rộng chiều cao webview để cuộn được
+  try { window.Telegram?.WebApp?.expand?.() } catch {}
+  load()
+})
 </script>
 
 <template>
@@ -119,6 +124,10 @@ onMounted(load)
           <div class="stat">
             <div class="stat-lbl">Số F1</div>
             <div class="stat-val">{{ info.direct_count }}</div>
+          </div>
+          <div class="stat">
+            <div class="stat-lbl">Hoa hồng (HTW)</div>
+            <div class="stat-val">{{ (info.commission_total ?? 0).toLocaleString() }}</div>
           </div>
         </div>
       </section>
@@ -175,18 +184,19 @@ onMounted(load)
 .topbar h1{margin:0; font:800 20px/1 ui-sans-serif,system-ui}
 .spacer{flex:1}
 
+/* tăng đáy để không bị BottomNav che */
 .wrap{
   width:100%;
   padding-top:12px;
-  padding-bottom:calc(20px + env(safe-area-inset-bottom));
+  padding-bottom:calc(96px + env(safe-area-inset-bottom));
   padding-left:max(16px, env(safe-area-inset-left));
   padding-right:max(16px, env(safe-area-inset-right));
   display:grid; gap:14px;
 }
 
-/* card base */
+/* card base – KHÔNG overflow:hidden để child (list) cuộn được */
 .card{
-  width:100%; margin-inline:0; overflow:hidden;
+  width:100%; margin-inline:0;
   background:#0f172a; border:var(--ring); border-radius:14px; padding:16px;
   box-shadow:0 10px 30px rgba(2,8,23,.35);
 }
@@ -215,13 +225,20 @@ onMounted(load)
 
 /* stats */
 .stats{display:grid; grid-template-columns:1fr; gap:10px}
+@media (min-width:420px){ .stats{ grid-template-columns:1fr 1fr } }
 .stat{background:#0e1525;border:var(--ring);border-radius:12px;padding:12px}
 .stat-lbl{color:#9aa3b2; font-size:12px}
 .stat-val{font:800 22px/1 ui-sans-serif,system-ui}
 
-/* list */
+/* list F1: cuộn riêng, mượt iOS */
 .empty{padding:24px 8px; text-align:center; color:#9aa3b2}
-.list{display:grid; gap:10px}
+.list{
+  display:grid; gap:10px;
+  max-height: 62vh;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-right: 2px;
+}
 .row{
   display:grid; grid-template-columns:auto 1fr auto; gap:10px;
   background:#0e1525;border:var(--ring);border-radius:12px;padding:10px;
