@@ -1,108 +1,169 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
+import { useRouter } from 'vue-router'
 import BottomNav from '../components/BottomNav.vue'
+
+const router = useRouter()
 const profile = ref(null)
 const loading = ref(false)
-const msg = ref('')
+const errorMsg = ref('')
 
+// Load profile from your server API (reads Supabase via service role)
 async function loadProfile() {
-  const r = await fetch('/api/profile')
-  if (r.ok) profile.value = await r.json()
+  try {
+    loading.value = true
+    const r = await fetch('/api/profile', { credentials: 'include' })
+    if (!r.ok) throw new Error(await r.text())
+    profile.value = await r.json()
+  } catch (e) {
+    errorMsg.value = 'Không tải được thông tin tài khoản.'
+    console.error(e)
+  } finally {
+    loading.value = false
+  }
 }
 
-async function doSwap() {
-  msg.value = ''; loading.value = true
-  const amt = Number(prompt('Nhập số HTW muốn đổi sang VND (tỉ giá 36):', '1'))
-  if (!amt || amt <= 0) return (loading.value=false)
-  const r = await fetch('/api/swap', {
-    method: 'POST',
-    headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({ amount_htw: amt, rate: 36 })
-  })
-  loading.value = false
-  if (!r.ok) { msg.value = 'Đổi thất bại: ' + await r.text(); return }
-  await loadProfile(); msg.value = `Đổi thành công ${amt} HTW → ${amt*36} VND`
-}
-
-async function doWithdraw() {
-  msg.value = ''; loading.value = true
-  const amt = Number(prompt('Nhập số VND muốn rút (min 1,000):', '1000'))
-  if (!amt || amt <= 0) return (loading.value=false)
-  const channel = prompt('Kênh rút (bank/momo/usdt):', 'momo') || 'momo'
-  const dest = prompt('Thông tin đích (SĐT Momo / STK / Address):', '') || ''
-  const r = await fetch('/api/withdraw', {
-    method: 'POST',
-    headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({ amount_vnd: amt, channel, dest })
-  })
-  loading.value = false
-  if (!r.ok) { msg.value = 'Tạo lệnh rút thất bại: ' + await r.text(); return }
-  await loadProfile(); msg.value = 'Đã tạo lệnh rút. Vui lòng chờ duyệt.'
-}
-
-const withdraws = ref([])
-async function loadWithdraws(){
-  const r = await fetch('/api/withdraw')
-  if (r.ok) withdraws.value = await r.json()
-}
-
-onMounted(async ()=>{
-  await loadProfile()
-  await loadWithdraws()
+const initials = computed(() => {
+  const f = profile.value?.first_name?.[0] ?? ''
+  const l = profile.value?.last_name?.[0] ?? ''
+  return (f + l || 'U').toUpperCase()
 })
+
+function copyUID() {
+  const id = profile.value?.id
+  if (id) navigator.clipboard?.writeText(String(id))
+}
+
+function goWithdraw() {
+  router.push({ name: 'withdraw' }) // -> /withdraw
+}
+function goSwap() {
+  router.push({ name: 'swap' }) // -> /swap
+}
+
+// Optional: open support chat
+function openSupport() {
+  // đổi link theo kênh CSKH của bạn
+  const url = 'https://t.me/your_support_channel'
+  if (window.Telegram?.WebApp?.openTelegramLink) {
+    window.Telegram.WebApp.openTelegramLink(url)
+  } else {
+    window.open(url, '_blank')
+  }
+}
+
+onMounted(loadProfile)
 </script>
 
 <template>
-  <div class="account">
+  <div class="wrap">
     <h2>Tài khoản</h2>
 
-    <div v-if="profile" class="card">
-      <div class="row">
-        <div>
-          <div class="name">{{ profile.first_name }} {{ profile.last_name }}</div>
-          <div class="uid">UID: {{ profile.id }}</div>
-          <div class="uname" v-if="profile.username">@{{ profile.username }}</div>
+    <div v-if="loading" class="card">Đang tải…</div>
+    <div v-else-if="errorMsg" class="card err">{{ errorMsg }}</div>
+
+    <div v-else class="stack">
+      <!-- User card -->
+      <div class="card user">
+        <div class="avatar">{{ initials }}</div>
+        <div class="uinfo">
+          <div class="uname">
+            {{ profile?.first_name }} {{ profile?.last_name }}
+          </div>
+          <div class="uid">
+            UID: <span>{{ profile?.id }}</span>
+            <button class="copy" title="Sao chép UID" @click="copyUID">📋</button>
+          </div>
+          <div v-if="profile?.username" class="handle">@{{ profile.username }}</div>
         </div>
       </div>
 
-      <div class="bal">
-        <div><b>{{ (profile.htw_balance ?? 0).toLocaleString() }}</b> HTW</div>
-        <div><b>{{ (profile.vnd_balance ?? 0).toLocaleString() }}</b> VND</div>
+      <!-- Balances -->
+      <div class="card bal">
+        <div class="label">Số dư</div>
+        <div class="value">
+          <b>{{ (profile?.htw_balance ?? 0).toLocaleString() }}</b>&nbsp;HTW
+        </div>
       </div>
 
-      <div class="actions">
-        <button class="btn" :disabled="loading" @click="doSwap">HTW → VND</button>
-        <button class="btn" :disabled="loading" @click="doWithdraw">Rút VND</button>
+      <div class="card bal">
+        <div class="label">VND</div>
+        <div class="value">
+          <b>{{ (profile?.vnd_balance ?? 0).toLocaleString() }}</b>&nbsp;VND
+        </div>
       </div>
 
-      <p class="msg" v-if="msg">{{ msg }}</p>
-    </div>
+      <!-- Menu items -->
+      <div class="card item" @click="openSupport">
+        <div class="left">
+          <span class="ic">💬</span>
+          <span class="text">CSKH Telegram</span>
+        </div>
+        <div class="chev">›</div>
+      </div>
 
-    <div class="card">
-      <h3>Lệnh rút gần đây</h3>
-      <div v-if="!withdraws.length">Chưa có lệnh rút.</div>
-      <ul v-else>
-        <li v-for="w in withdraws" :key="w.id">
-          #{{ w.id }} — {{ Number(w.amount_vnd).toLocaleString() }} VND —
-          {{ w.channel }} → {{ w.dest }} —
-          <b>{{ w.status }}</b> — {{ new Date(w.created_at).toLocaleString() }}
-        </li>
-      </ul>
+      <div class="card item" @click="goWithdraw">
+        <div class="left">
+          <span class="ic">💳</span>
+          <span class="text">Rút VND</span>
+        </div>
+        <div class="chev">›</div>
+      </div>
+
+      <div class="card item" @click="goSwap">
+        <div class="left">
+          <span class="ic">🔄</span>
+          <span class="text">HTW → VND</span>
+        </div>
+        <div class="chev">›</div>
+      </div>
     </div>
   </div>
   <BottomNav/>
 </template>
 
 <style scoped>
-.account { max-width: 720px; margin: 0 auto; padding: 16px; }
-.card { background:#0f172a; color:#fff; border:1px solid #1f2a37; border-radius:16px; padding:16px; margin-bottom:16px; }
-.row { display:flex; align-items:center; gap:12px; }
-.name { font-weight:700; font-size:18px; }
-.uid,.uname { opacity:.8; font-size:12px; }
-.bal { display:flex; justify-content:space-between; margin:12px 0; }
-.actions { display:flex; gap:12px; }
-.btn { background:#2563eb; color:#fff; border:0; padding:10px 14px; border-radius:10px; font-weight:700; cursor:pointer; }
-.btn:disabled{ opacity:.6; cursor:not-allowed; }
-.msg { margin-top:10px; color:#a7f3d0; }
-ul{ padding-left:18px; }
+.wrap { max-width: 720px; margin: 0 auto; padding: 16px; }
+h2 { color: #fff; margin: 0 0 12px; }
+
+.stack { display: flex; flex-direction: column; gap: 12px; }
+
+.card {
+  background: #0f172a;
+  color: #fff;
+  border: 1px solid #1f2a37;
+  border-radius: 16px;
+  padding: 16px;
+}
+
+.card.err { color: #fecaca; border-color: #7f1d1d; background: #1b0f12; }
+
+.user { display: flex; align-items: center; gap: 12px; }
+.avatar {
+  width: 56px; height: 56px;
+  border-radius: 50%;
+  display: grid; place-items: center;
+  background: #1f2a37; color: #fff; font-weight: 800;
+}
+.uinfo { display: flex; flex-direction: column; gap: 4px; }
+.uname { font-weight: 700; font-size: 16px; }
+.uid, .handle { opacity: .85; font-size: 13px; }
+.copy {
+  margin-left: 6px; font-size: 12px; line-height: 1;
+  background: transparent; border: 0; color: #cbd5e1; cursor: pointer;
+}
+
+.bal { display: flex; justify-content: space-between; align-items: center; }
+.bal .label { opacity: .9; }
+.bal .value { font-size: 18px; }
+
+.item {
+  display: flex; align-items: center; justify-content: space-between;
+  cursor: pointer; transition: background .15s ease;
+}
+.item:hover { background: #111a2f; }
+.left { display: flex; align-items: center; gap: 10px; }
+.ic { width: 22px; text-align: center; opacity: .9; }
+.text { font-weight: 600; }
+.chev { opacity: .6; font-size: 22px; line-height: 1; }
 </style>
