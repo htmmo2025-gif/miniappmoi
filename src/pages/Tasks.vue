@@ -2,7 +2,10 @@
 import { ref, onMounted } from 'vue'
 import BottomNav from '../components/BottomNav.vue'
 
-const blockId = import.meta.env.VITE_ADSGRAM_BLOCK_ID
+// --- ENV (frontend) ---
+const blockId  = import.meta.env.VITE_ADSGRAM_BLOCK_ID || ''
+const rewardUi = Number(import.meta.env.VITE_ADSGRAM_REWARD_HTW ?? 1) // chỉ để hiển thị trên UI
+
 const rewarding = ref(false)
 const loadingSdk = ref(false)
 const prof = ref(null)
@@ -38,7 +41,6 @@ function loadAdsgramSdk () {
 }
 
 let adCtrl = null
-
 async function ensureAdCtrl () {
   await loadAdsgramSdk()
   if (!blockId) throw new Error('Thiếu VITE_ADSGRAM_BLOCK_ID')
@@ -53,14 +55,16 @@ async function showAd () {
     const ctrl = await ensureAdCtrl()
     rewarding.value = true
     await ctrl.show()
-    // người dùng đã xem & đủ điều kiện thưởng → gọi API cộng HTW
+
+    // Người dùng xem xong → server cộng HTW theo process.env.ADSGRAM_REWARD_HTW
     const r = await fetch('/api/tasks/adsgram-reward', {
       method: 'POST',
       credentials: 'include'
     })
     if (!r.ok) throw new Error(await r.text())
+
     await loadProfile()
-    toast(`+${import.meta.env.ADSGRAM_REWARD_HTW ?? 1} HTW`)
+    toast(`+${rewardUi} HTW`)
     try { window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('success') } catch {}
   } catch (e) {
     console.error(e)
@@ -93,7 +97,7 @@ onMounted(loadProfile)
       <section class="card">
         <div class="title"><i class="bi bi-badge-ad"></i> Xem quảng cáo Adsgram</div>
         <p class="mut">
-          Mỗi lần xem thưởng <b>{{ Number(import.meta.env.ADSGRAM_REWARD_HTW ?? 1) }}</b> HTW.
+          Mỗi lần xem thưởng <b>{{ rewardUi }}</b> HTW.
           (Có giới hạn thời gian giữa các lượt để chống spam)
         </p>
 
@@ -113,7 +117,7 @@ onMounted(loadProfile)
         <div class="title"><i class="bi bi-info-circle"></i> Lưu ý</div>
         <ul>
           <li>Nếu ad không hiện, hãy thử lại sau vài phút hoặc kiểm tra trạng thái duyệt block trên Adsgram.</li>
-          <li>Hãy điền <b>Reward URL</b> trong Adsgram (bên dưới) để chống gian lận tốt hơn.</li>
+          <li>Hãy điền <b>Reward URL</b> trong Adsgram để chống gian lận tốt hơn.</li>
         </ul>
       </section>
     </main>
