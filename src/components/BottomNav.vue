@@ -123,7 +123,7 @@ const router = useRouter()
 
 .tab-button:hover .icon,
 .tab-button.active .icon {
-  color: #4ade80;
+  color: #4a63de;
   transform: scale(1.1);
 }
 
