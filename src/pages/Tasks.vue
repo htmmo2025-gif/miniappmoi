@@ -3,25 +3,27 @@ import { ref, onMounted } from 'vue'
 import BottomNav from '../components/BottomNav.vue'
 
 /* ========= ENV =========
-   Bạn có thể đặt:
-   - VITE_ADSGRAM_BLOCK_ID = 15248         (Task block → đúng)
-   - VITE_ADSGRAM_BLOCK_ID = task-15248    (tự chuyển thành 15248)
-   - VITE_ADSGRAM_BLOCK_ID = int-98765     (Interstitial → giữ nguyên)
+   Ví dụ:
+   - Task block: VITE_ADSGRAM_BLOCK_ID=task-15248
+   - Interstitial: VITE_ADSGRAM_BLOCK_ID=int-12345
+   - (cũ) Interstitial kiểu số: VITE_ADSGRAM_BLOCK_ID=12345
 */
 const rawId = String(import.meta.env.VITE_ADSGRAM_BLOCK_ID ?? '').trim()
-const blockId =
-  /^int-\d+$/i.test(rawId) ? rawId :                 // interstitial hỗ trợ int-xxxxx
-  /^task-\d+$/i.test(rawId) ? rawId.replace(/^task-/i, '') : // task-xxxxx → "xxxxx"
-  /^\d+$/.test(rawId) ? rawId :                      // số thuần → OK
-  ''                                                 // sai định dạng
+const rewardUi = Number(import.meta.env.VITE_ADSGRAM_REWARD_HTW ?? 1) // chỉ hiển thị
 
-// Chỉ để hiển thị (server quyết định thưởng thật)
-const rewardUi = Number(import.meta.env.VITE_ADSGRAM_REWARD_HTW ?? 1)
+// Phân loại block
+const isTaskBlock = /^task-\d+$/i.test(rawId)
+const isIntBlock  = /^int-\d+$/i.test(rawId)
+const isNumeric   = /^\d+$/.test(rawId)
 
-const rewarding = ref(false)
-const loadingSdk = ref(false)
-const prof = ref(null)
-const msg = ref('')
+// URL SDK (sửa theo tài liệu Adsgram của bạn nếu khác)
+const TASK_SDK_URL = 'https://js.adsgram.ai/adsgram-task.min.js'    // cho task-xxxxx
+const INT_SDK_URL  = 'https://sad.adsgram.ai/js/sad.min.js'         // cho int-xxxxx / số
+
+const sdkLoading  = ref(false)
+const rewarding   = ref(false)
+const prof        = ref(null)
+const msg         = ref('')
 
 async function loadProfile () {
   try {
@@ -39,43 +41,55 @@ function toast(t) {
   setTimeout(() => { el.classList.remove('show'); setTimeout(() => el.remove(), 250) }, 1600)
 }
 
-function loadAdsgramSdk () {
-  if (window.Adsgram) return Promise.resolve()
-  loadingSdk.value = true
+function loadSdkOnce (url) {
+  if ([...document.scripts].some(s => s.src === url)) return Promise.resolve()
+  sdkLoading.value = true
   return new Promise((resolve, reject) => {
     const s = document.createElement('script')
-    s.src = 'https://sad.adsgram.ai/js/sad.min.js'
+    s.src = url
     s.async = true
-    s.onload = () => { loadingSdk.value = false; resolve() }
-    s.onerror = (e) => { loadingSdk.value = false; reject(e) }
+    s.onload = () => { sdkLoading.value = false; resolve() }
+    s.onerror = (e) => { sdkLoading.value = false; reject(e) }
     document.head.appendChild(s)
   })
-}
-
-let adCtrl = null
-async function ensureAdCtrl () {
-  await loadAdsgramSdk()
-  if (!blockId) throw new Error('Thiếu/sai VITE_ADSGRAM_BLOCK_ID (Task: số thuần; Interstitial: int-XXXXX)')
-  if (!adCtrl) adCtrl = window.Adsgram?.init({ blockId }) // ví dụ "15248" hoặc "int-12345"
-  if (!adCtrl) throw new Error('Không khởi tạo được Adsgram')
-  return adCtrl
 }
 
 async function showAd () {
   msg.value = ''
   try {
-    const ctrl = await ensureAdCtrl()
-    rewarding.value = true
-    await ctrl.show()
+    let used = null
 
-    // Xem xong → gọi server cộng HTW
-    const r = await fetch('/api/tasks/adsgram-reward', {
-      method: 'POST',
-      credentials: 'include'
-    })
+    if (isTaskBlock) {
+      // TASK MODE
+      await loadSdkOnce(TASK_SDK_URL)
+      if (!window.AdsgramTask && !window.Adsgram?.Task) {
+        throw new Error('Không tìm thấy SDK Task. Hãy kiểm tra URL SDK Task theo tài liệu Adsgram.')
+      }
+      rewarding.value = true
+      // một số bản SDK expose dưới window.AdsgramTask, số khác dưới window.Adsgram.Task
+      const api = window.AdsgramTask || window.Adsgram?.Task
+      used = 'task'
+      // blockId phải là "task-xxxxx"
+      await api.show({ blockId: rawId })
+    } else if (isIntBlock || isNumeric) {
+      // INTERSTITIAL MODE
+      await loadSdkOnce(INT_SDK_URL)
+      if (!window.Adsgram?.init) {
+        throw new Error('Không tìm thấy SDK Interstitial (sad.min.js).')
+      }
+      rewarding.value = true
+      const ctrl = window.Adsgram.init({ blockId: isIntBlock ? rawId : String(rawId) })
+      await ctrl.show()
+      used = 'int'
+    } else {
+      throw new Error('Thiếu/sai VITE_ADSGRAM_BLOCK_ID. Task: task-XXXXX. Interstitial: int-XXXXX hoặc số.')
+    }
+
+    // người dùng xem xong → gọi server cộng HTW thật
+    const r = await fetch('/api/tasks/adsgram-reward', { method: 'POST', credentials: 'include' })
     if (!r.ok) throw new Error(await r.text())
-
     await loadProfile()
+
     toast(`+${rewardUi} HTW`)
     try { window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('success') } catch {}
   } catch (e) {
@@ -105,7 +119,6 @@ onMounted(loadProfile)
         </div>
       </section>
 
-      <!-- Adsgram task -->
       <section class="card">
         <div class="title"><i class="bi bi-badge-ad"></i> Xem quảng cáo Adsgram</div>
         <p class="mut">
@@ -113,14 +126,14 @@ onMounted(loadProfile)
           (Có giới hạn thời gian giữa các lượt để chống spam)
         </p>
 
-        <button class="btn" :disabled="rewarding || loadingSdk || !blockId" @click="showAd">
+        <button class="btn" :disabled="rewarding || sdkLoading || !rawId" @click="showAd">
           <i v-if="rewarding" class="bi bi-hourglass-split spin"></i>
           <i v-else class="bi bi-play-circle"></i>
           <span>{{ rewarding ? 'Đang thưởng...' : 'Xem quảng cáo' }}</span>
         </button>
 
-        <p v-if="!blockId" class="warn">
-          Thiếu <b>VITE_ADSGRAM_BLOCK_ID</b> (Task: nhập số <code>XXXXX</code>; Interstitial: <code>int-XXXXX</code>).
+        <p v-if="!rawId" class="warn">
+          Thiếu <b>VITE_ADSGRAM_BLOCK_ID</b> (Task: <code>task-XXXXX</code>; Interstitial: <code>int-XXXXX</code> hoặc số).
         </p>
         <p v-if="msg" class="note err"><i class="bi bi-exclamation-circle"></i> {{ msg }}</p>
       </section>
@@ -128,8 +141,9 @@ onMounted(loadProfile)
       <section class="card tip">
         <div class="title"><i class="bi bi-info-circle"></i> Lưu ý</div>
         <ul>
-          <li>Nếu ad không hiện, hãy thử lại sau vài phút hoặc kiểm tra trạng thái duyệt block trên Adsgram.</li>
-          <li>Đặt <b>Reward URL</b> trong Adsgram để chống gian lận tốt hơn.</li>
+          <li>Nếu ad không hiện, kiểm tra lại “Block type” trong Adsgram: <b>Task</b> hay <b>Interstitial</b>.</li>
+          <li>Nếu là <b>Task</b>, giữ nguyên <code>task-XXXXX</code> và dùng đúng SDK Task (đặt URL trong code nếu tài liệu của bạn khác).</li>
+          <li>Nếu là <b>Interstitial</b>, dùng <code>int-XXXXX</code> (hoặc số) với SDK <code>sad.min.js</code>.</li>
         </ul>
       </section>
     </main>
