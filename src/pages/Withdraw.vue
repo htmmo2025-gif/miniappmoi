@@ -103,6 +103,7 @@ onMounted(() => Promise.all([loadProfile(), loadList()]))
               class="amt"
               v-model="amount"
               type="number"
+              inputmode="numeric"
               pattern="[0-9]*"
               min="1" step="1000" placeholder="0"
             />
@@ -125,7 +126,7 @@ onMounted(() => Promise.all([loadProfile(), loadList()]))
           <input class="txt" v-model="bankName" placeholder="VD: Vietcombank, BIDV, Techcombank..." />
 
           <label class="lbl"><i class="bi bi-credit-card-2-front"></i> Số tài khoản</label>
-          <input class="txt" v-model="dest" type="number"  placeholder="1234567890" />
+          <input class="txt" v-model="dest" type="number" inputmode="numeric" placeholder="1234567890" />
 
           <label class="lbl"><i class="bi bi-person"></i> Tên chủ tài khoản</label>
           <input class="txt up" v-model="accountName" placeholder="NGUYEN VAN A" />
