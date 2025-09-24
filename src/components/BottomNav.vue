@@ -81,6 +81,8 @@ const router = useRouter()
   padding: 4px 8px 8px;
   box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.3);
   backdrop-filter: blur(10px);
+  z-index: 9999;
+  min-height: 60px;
 }
 
 .tab-button {
