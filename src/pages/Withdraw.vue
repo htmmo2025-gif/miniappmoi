@@ -185,12 +185,16 @@ onMounted(() => Promise.all([loadProfile(), loadList()]))
   background:var(--bg); color:#e5e7eb; width:100dvw; min-height:100dvh;
 }
 .topbar{
-  position:sticky; top:0; z-index:10;
-  padding: calc(10px + env(safe-area-inset-top)) 16px 10px;
-  display:flex; align-items:center; gap:10px;
-  background:linear-gradient(180deg,rgba(11,15,26,.96),rgba(11,15,26,.7) 65%,transparent);
-  backdrop-filter:blur(8px);
+  position: sticky; top: 0; z-index: 10;
+  padding-block: calc(10px + env(safe-area-inset-top)) 10px;
+  /* đệm 2 bên cân, tôn trọng safe-area nếu có notch */
+  padding-left: max(16px, env(safe-area-inset-left));
+  padding-right: max(16px, env(safe-area-inset-right));
+  display: flex; align-items: center; gap: 10px;
+  background: linear-gradient(180deg, rgba(11,15,26,.96), rgba(11,15,26,.7) 65%, transparent);
+  backdrop-filter: blur(8px);
 }
+
 .topbar h1{margin:0; font:800 20px/1 ui-sans-serif,system-ui}
 .back{
   width:36px;height:36px;border-radius:50%;border:var(--ring);background:#0e1726;
@@ -198,14 +202,17 @@ onMounted(() => Promise.all([loadProfile(), loadList()]))
 }
 .spacer{flex:1}
 .wrap{
-  padding:12px 16px calc(20px + env(safe-area-inset-bottom));
-  display:grid; gap:14px; width:100%;
+  width: 100%;
+  /* KHÔNG dùng max-width; chỉ padding 2 bên cân */
+  padding-top: 12px;
+  padding-bottom: calc(20px + env(safe-area-inset-bottom));
+  padding-left: max(16px, env(safe-area-inset-left));
+  padding-right: max(16px, env(safe-area-inset-right));
+  display: grid; gap: 14px;
 }
 
 /* ========== card dùng chung ========== */
-.card{
-  background:var(--card); border-radius:16px; border:var(--ring); padding:14px;
-}
+.card{ width: 100%; margin-inline: 0; overflow: hidden }
 .section-title{display:flex; align-items:center; gap:8px; font-weight:800; margin-bottom:10px}
 
 /* Hero balance */
@@ -226,7 +233,7 @@ onMounted(() => Promise.all([loadProfile(), loadList()]))
 }
 .amt:focus{box-shadow:0 0 0 2px #22d3ee55 inset}
 .cur{position:absolute; right:12px; top:50%; transform:translateY(-50%); color:var(--mut); font-weight:700}
-.chip-grid{display:grid; grid-template-columns:repeat(4,1fr); gap:8px}
+.chip-grid{ display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 8px }
 .chip{
   padding:10px 0; border-radius:12px; background:#0e1726; border:var(--ring);
   color:#a3b2c7; font-weight:700;
@@ -271,7 +278,8 @@ onMounted(() => Promise.all([loadProfile(), loadList()]))
 .st-pending{background:#f59e0b1a; color:#f59e0b; border:1px solid #f59e0b55}
 .st-done{background:#10b9811a; color:#10b981; border:1px solid #10b98155}
 .st-reject{background:#ef44441a; color:#ef4444; border:1px solid #ef444455}
-
+:global(*), :global(*::before), :global(*::after){ box-sizing: border-box }
+:global(html, body, #app){ margin: 0; overflow-x: hidden }
 /* Responsive tweaks */
 @media (max-width:360px){ .chip-grid{grid-template-columns:repeat(2,1fr)} }
 </style>
