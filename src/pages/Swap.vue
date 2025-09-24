@@ -1,527 +1,259 @@
 <script setup>
 import { ref, onMounted, computed } from 'vue'
 
-const RATE = 36
+/** 1 HTW = 3 VND */
+const RATE = 3
+
 const prof = ref(null)
-const amount = ref('')
+const amount = ref('')        // số HTW
 const msg = ref('')
 const busy = ref(false)
 
-async function loadProfile() {
+async function loadProfile () {
   const r = await fetch('/api/profile', { credentials: 'include' })
   if (r.ok) prof.value = await r.json()
 }
 
-const vnd = computed(() => {
-  const n = Number(amount.value || 0)
-  return Number.isFinite(n) ? n * RATE : 0
+const htwBalance = computed(() => Number(prof.value?.htw_balance ?? 0))
+const vndBalance = computed(() => Number(prof.value?.vnd_balance ?? 0))
+
+const amountNum = computed(() => {
+  const n = Number(amount.value)
+  return Number.isFinite(n) ? n : 0
 })
 
-async function submit() {
-  msg.value = ''; busy.value = true
-  const n = Number(amount.value)
-  if (!Number.isFinite(n) || n <= 0) { 
-    msg.value = 'Số HTW không hợp lệ'; 
-    busy.value = false; 
-    return 
+const vnd = computed(() => Math.floor(amountNum.value * RATE))
+
+const canSwap = computed(() =>
+  amountNum.value > 0 &&
+  amountNum.value <= htwBalance.value &&
+  !busy.value
+)
+
+function fillMax () {
+  // làm tròn 3 chữ số thập phân cho đẹp
+  const n = Math.max(0, htwBalance.value)
+  amount.value = (Math.floor(n * 1000) / 1000).toString()
+}
+
+async function submit () {
+  msg.value = ''
+  if (!canSwap.value) {
+    msg.value = amountNum.value > htwBalance.value
+      ? 'Số HTW vượt quá số dư.'
+      : 'Số HTW không hợp lệ.'
+    return
   }
-  const r = await fetch('/api/swap', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    credentials: 'include',
-    body: JSON.stringify({ amount_htw: n, rate: RATE })
-  })
-  busy.value = false
-  if (!r.ok) { 
-    msg.value = 'Đổi thất bại: ' + await r.text(); 
-    return 
+  try {
+    busy.value = true
+    const r = await fetch('/api/swap', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ amount_htw: amountNum.value, rate: RATE })
+    })
+    if (!r.ok) throw new Error(await r.text())
+    await loadProfile()
+    amount.value = ''
+    msg.value = 'Đổi thành công!'
+  } catch (e) {
+    msg.value = 'Đổi thất bại: ' + (e.message || 'Lỗi không xác định')
+  } finally {
+    busy.value = false
   }
-  await loadProfile()
-  amount.value = ''
-  msg.value = 'Đổi thành công!'
 }
 
 onMounted(loadProfile)
 </script>
 
 <template>
-  <div class="wrap">
-    <!-- Header with gradient and icon -->
-    <div class="header">
-      <div class="header-icon">
-        <i class="bi bi-arrow-left-right"></i>
+  <div class="page">
+    <!-- Topbar -->
+    <div class="topbar">
+      <button class="icon-btn" @click="$router.back()">
+        <i class="bi bi-arrow-left"></i>
+      </button>
+      <div class="top-title">
+        <div class="tt">Đổi token</div>
+        <div class="sub">HTW → VND</div>
       </div>
-      <h1 class="title">Currency Swap</h1>
-      <p class="subtitle">HTW → VND Exchange</p>
+      <div class="spacer"></div>
     </div>
 
-    <div class="main-card" v-if="prof">
-      <!-- Balance Display -->
-      <div class="balance-section">
-        <h3 class="section-title">
-          <i class="bi bi-wallet2"></i>
-          Số dư ví
-        </h3>
-        <div class="balance-grid">
-          <div class="balance-item htw-balance">
-            <div class="balance-header">
-              <i class="bi bi-coin"></i>
-              <span>HTW</span>
-            </div>
-            <div class="balance-value">{{ (prof.htw_balance ?? 0).toLocaleString() }}</div>
+    <div class="wrap" v-if="prof">
+      <!-- Số dư ví -->
+      <div class="card wallet">
+        <div class="row2">
+          <div class="stat htw">
+            <div class="label"><i class="bi bi-coin"></i> HTW</div>
+            <div class="value">{{ htwBalance.toLocaleString() }}</div>
           </div>
-          <div class="balance-item vnd-balance">
-            <div class="balance-header">
-              <i class="bi bi-currency-dollar"></i>
-              <span>VND</span>
-            </div>
-            <div class="balance-value">{{ (prof.vnd_balance ?? 0).toLocaleString() }}</div>
+          <div class="stat vnd">
+            <div class="label"><i class="bi bi-currency-dollar"></i> VND</div>
+            <div class="value">{{ vndBalance.toLocaleString() }}</div>
           </div>
+        </div>
+        <div class="rate">
+          <i class="bi bi-graph-up-arrow"></i>
+          Tỷ giá: <b>1 HTW = {{ RATE }} VND</b>
         </div>
       </div>
 
-      <!-- Swap Section -->
-      <div class="swap-section">
-        <h3 class="section-title">
-          <i class="bi bi-arrow-repeat"></i>
-          Giao dịch
-        </h3>
-
-        <!-- Input Section -->
-        <div class="input-group">
-          <label class="input-label">
-            <i class="bi bi-input-cursor"></i>
-            Số HTW muốn đổi
-          </label>
-          <div class="input-wrapper">
-            <input 
-              class="amount-input" 
-              v-model="amount" 
-              type="number" 
-              min="0" 
-              step="0.001" 
-              placeholder="Nhập số HTW..." 
+      <!-- Nhập số lượng -->
+      <div class="card">
+        <div class="field">
+          <label class="flabel"><i class="bi bi-input-cursor-text"></i> Số HTW muốn đổi</label>
+          <div class="amount-box">
+            <input
+              v-model="amount"
+              type="number"
+              inputmode="decimal"
+              min="0"
+              step="0.001"
+              placeholder="0.000"
             />
-            <span class="input-suffix">HTW</span>
+            <span class="suffix">HTW</span>
+            <button class="pill" type="button" @click="fillMax">Tối đa</button>
           </div>
+          <div class="hint">
+            Sẽ nhận: <b>{{ vnd.toLocaleString() }}</b> VND
+          </div>
+          <div v-if="amountNum > htwBalance" class="err">Số HTW vượt quá số dư.</div>
         </div>
 
-        <!-- Exchange Rate Display -->
-        <div class="rate-info">
-          <div class="rate-card">
-            <i class="bi bi-graph-up-arrow"></i>
-            <div class="rate-details">
-              <div class="rate-label">Tỷ giá hiện tại</div>
-              <div class="rate-value">1 HTW = {{ RATE }} VND</div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Preview Section -->
-        <div class="preview-section" v-if="amount && vnd > 0">
-          <div class="preview-card">
-            <div class="preview-header">
-              <i class="bi bi-eye"></i>
-              <span>Xem trước giao dịch</span>
-            </div>
-            <div class="preview-content">
-              <div class="preview-row">
-                <span>Số HTW đổi:</span>
-                <strong>{{ Number(amount).toLocaleString() }} HTW</strong>
-              </div>
-              <div class="preview-arrow">
-                <i class="bi bi-arrow-down"></i>
-              </div>
-              <div class="preview-row receive">
-                <span>Sẽ nhận được:</span>
-                <strong>{{ vnd.toLocaleString() }} VND</strong>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Submit Button -->
-        <button class="swap-btn" :disabled="busy || !amount || vnd <= 0" @click="submit">
-          <template v-if="busy">
-            <i class="bi bi-hourglass-split spinning"></i>
-            <span>Đang xử lý...</span>
-          </template>
-          <template v-else>
-            <i class="bi bi-arrow-repeat"></i>
-            <span>Thực hiện đổi</span>
-          </template>
+        <button class="primary" :disabled="!canSwap" @click="submit">
+          <i v-if="busy" class="bi bi-hourglass-split spin"></i>
+          <i v-else class="bi bi-arrow-repeat"></i>
+          <span>{{ busy ? 'Đang xử lý...' : 'Thực hiện đổi' }}</span>
         </button>
 
-        <!-- Message Display -->
-        <div class="message" v-if="msg" :class="{ success: msg.includes('thành công'), error: !msg.includes('thành công') }">
-          <i :class="msg.includes('thành công') ? 'bi bi-check-circle-fill' : 'bi bi-exclamation-triangle-fill'"></i>
-          <span>{{ msg }}</span>
+        <div v-if="msg" :class="['msg', msg.includes('thành công') ? 'ok' : 'bad']">
+          <i :class="msg.includes('thành công') ? 'bi bi-check-circle' : 'bi bi-exclamation-triangle'"></i>
+          {{ msg }}
         </div>
       </div>
     </div>
 
-    <!-- Loading State -->
-    <div v-else class="loading-card">
-      <i class="bi bi-hourglass-split spinning"></i>
-      <p>Đang tải thông tin...</p>
+    <div v-else class="wrap">
+      <div class="card center">
+        <i class="bi bi-hourglass-split spin big"></i>
+        <div>Đang tải thông tin…</div>
+      </div>
     </div>
   </div>
 </template>
 
 <style scoped>
-/* Import Bootstrap Icons */
-@import url('https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css');
+@import url('https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css');
 
-.wrap {
-  max-width: 480px;
-  margin: 0 auto;
-  padding: 20px;
-  min-height: 100vh;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+:global(*), :global(*::before), :global(*::after){ box-sizing: border-box }
+:global(html, body, #app){ margin:0; background:#0b0f1a; color:#e5e7eb }
+
+.page{ min-height:100vh; background: radial-gradient(1200px 600px at 10% -10%, #10223a 0%, transparent 60%) #0b0f1a; }
+
+/* Topbar cân 2 bên, hỗ trợ safe-area */
+.topbar{
+  position: sticky; top:0; z-index:10;
+  display:flex; align-items:center; gap:12px;
+  padding-top: calc(10px + env(safe-area-inset-top));
+  padding-bottom: 10px;
+  padding-left: max(16px, env(safe-area-inset-left));
+  padding-right: max(16px, env(safe-area-inset-right));
+  background: linear-gradient(180deg, rgba(11,15,26,.96), rgba(11,15,26,.7) 65%, transparent);
+  backdrop-filter: blur(8px);
+}
+.icon-btn{
+  width:38px; height:38px; border-radius:12px;
+  border:1px solid rgba(148,163,184,.18);
+  background: rgba(148,163,184,.08); color:#e5e7eb;
+  display:grid; place-items:center; font-size:18px;
+}
+.top-title .tt{ font-weight:800; letter-spacing:.3px }
+.top-title .sub{ font-size:12px; color:#93a4bd }
+.spacer{ flex:1 }
+
+/* content wrap cân 2 bên */
+.wrap{
+  padding-left: max(16px, env(safe-area-inset-left));
+  padding-right: max(16px, env(safe-area-inset-right));
+  padding-bottom: calc(20px + env(safe-area-inset-bottom));
+  padding-top: 12px;
+  display:grid; gap:14px;
 }
 
-/* Header Styles */
-.header {
-  text-align: center;
-  margin-bottom: 32px;
-  color: white;
+/* cards */
+.card{
+  width:100%; border-radius:18px; overflow:hidden;
+  border:1px solid rgba(148,163,184,.16);
+  background: linear-gradient(180deg, rgba(17,24,39,.82), rgba(15,23,42,.76));
+  box-shadow: 0 10px 30px rgba(2,8,23,.35);
+  padding:16px;
+}
+.card.center{ display:grid; place-items:center; gap:10px; padding:28px }
+
+.wallet .row2{
+  display:grid; grid-template-columns: 1fr 1fr; gap:12px; margin-bottom:10px;
+}
+.stat{
+  padding:14px; border-radius:14px;
+  background: linear-gradient(180deg, rgba(241,245,249,.03), rgba(241,245,249,.01));
+  border:1px solid rgba(148,163,184,.16);
+}
+.stat .label{ display:flex; align-items:center; gap:8px; color:#99a7be; font-size:13px }
+.stat .value{ font-size:20px; font-weight:800; letter-spacing:.3px }
+.stat.htw .value{ color:#fde68a }
+.stat.vnd .value{ color:#a5b4fc }
+
+.wallet .rate{
+  margin-top:6px; font-size:12px; color:#97a6c4; display:flex; align-items:center; gap:6px
 }
 
-.header-icon {
-  width: 80px;
-  height: 80px;
-  margin: 0 auto 20px;
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.2);
+/* field */
+.field{ display:grid; gap:8px; margin-bottom:12px }
+.flabel{ display:flex; gap:8px; align-items:center; color:#cbd5e1; font-weight:600; font-size:14px }
+.amount-box{
+  position:relative; display:flex; align-items:center;
+  background: rgba(241,245,249,.04);
+  border:1.5px solid rgba(148,163,184,.22);
+  border-radius:14px; padding:10px 12px; gap:8px;
 }
-
-.header-icon i {
-  font-size: 36px;
-  color: white;
+.amount-box input{
+  flex:1; background:transparent; border:0; outline:none; color:#e5e7eb;
+  font-size:18px; font-weight:700; letter-spacing:.3px;
 }
-
-.title {
-  font-size: 28px;
-  font-weight: 700;
-  margin: 0 0 8px 0;
-  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+.amount-box .suffix{ color:#9aa8c2; font-weight:700 }
+.amount-box .pill{
+  border:1px solid rgba(148,163,184,.25);
+  background: rgba(148,163,184,.08);
+  color:#cbd5e1; padding:6px 10px; border-radius:12px; font-size:12px; font-weight:700;
 }
+.hint{ font-size:12px; color:#8ba3c7 }
+.err{ font-size:12px; color:#fca5a5 }
 
-.subtitle {
-  font-size: 16px;
-  opacity: 0.9;
-  margin: 0;
-  font-weight: 500;
+/* button */
+.primary{
+  width:100%;
+  display:flex; align-items:center; justify-content:center; gap:8px;
+  border:0; border-radius:14px; padding:12px 16px;
+  color:#0b0f1a; font-weight:800;
+  background: linear-gradient(90deg, #fde68a, #60a5fa);
+  box-shadow: 0 10px 30px rgba(6,182,212,.22);
 }
+.primary:disabled{ opacity:.5; filter:saturate(.6) }
+.spin{ animation:spin 1s linear infinite }
+.big{ font-size:40px }
+@keyframes spin{ to{ transform: rotate(360deg)}}
 
-/* Main Card */
-.main-card {
-  background: rgba(255, 255, 255, 0.95);
-  border-radius: 24px;
-  padding: 24px;
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.2);
+/* message */
+.msg{
+  margin-top:10px; padding:10px 12px; border-radius:12px; font-size:13px; font-weight:700;
+  display:flex; align-items:center; gap:8px;
 }
+.msg.ok{ background: rgba(34,197,94,.12); color:#34d399; border:1px solid rgba(34,197,94,.35) }
+.msg.bad{ background: rgba(239,68,68,.12); color:#f87171; border:1px solid rgba(239,68,68,.35) }
 
-/* Section Titles */
-.section-title {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  font-size: 18px;
-  font-weight: 600;
-  color: #1f2937;
-  margin: 0 0 20px 0;
-}
-
-.section-title i {
-  font-size: 20px;
-  color: #6366f1;
-}
-
-/* Balance Section */
-.balance-section {
-  margin-bottom: 32px;
-}
-
-.balance-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 16px;
-}
-
-.balance-item {
-  background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
-  border-radius: 16px;
-  padding: 20px;
-  text-align: center;
-  border: 1px solid #e2e8f0;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
-}
-
-.balance-item:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
-}
-
-.htw-balance {
-  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
-}
-
-.vnd-balance {
-  background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
-}
-
-.balance-header {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  font-weight: 500;
-  color: #374151;
-  margin-bottom: 8px;
-}
-
-.balance-header i {
-  font-size: 18px;
-}
-
-.balance-value {
-  font-size: 20px;
-  font-weight: 700;
-  color: #111827;
-}
-
-
-/* Input Group */
-.input-group {
-  margin-bottom: 24px;
-}
-
-.input-label {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-weight: 500;
-  color: #374151;
-  margin-bottom: 12px;
-  font-size: 14px;
-}
-
-.input-wrapper {
-  position: relative;
-  display: flex;
-  align-items: center;
-}
-
-.amount-input {
-  width: 100%;
-  padding: 16px 60px 16px 16px;
-  border: 2px solid #e5e7eb;
-  border-radius: 12px;
-  font-size: 16px;
-  font-weight: 500;
-  background: #f9fafb;
-  transition: all 0.2s ease;
-}
-
-.amount-input:focus {
-  outline: none;
-  border-color: #6366f1;
-  background: white;
-  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
-}
-
-.input-suffix {
-  position: absolute;
-  right: 16px;
-  color: #6b7280;
-  font-weight: 500;
-  font-size: 14px;
-}
-
-/* Rate Info */
-.rate-info {
-  margin-bottom: 24px;
-}
-
-.rate-card {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
-  border: 1px solid #bae6fd;
-  border-radius: 12px;
-  padding: 16px;
-}
-
-.rate-card i {
-  font-size: 24px;
-  color: #0284c7;
-}
-
-.rate-details {
-  flex: 1;
-}
-
-.rate-label {
-  font-size: 12px;
-  color: #6b7280;
-  margin-bottom: 4px;
-}
-
-.rate-value {
-  font-size: 16px;
-  font-weight: 600;
-  color: #0f172a;
-}
-
-/* Preview Section */
-.preview-section {
-  margin-bottom: 24px;
-}
-
-.preview-card {
-  background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
-  border: 1px solid #bbf7d0;
-  border-radius: 16px;
-  padding: 20px;
-}
-
-.preview-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-weight: 600;
-  color: #15803d;
-  margin-bottom: 16px;
-  font-size: 14px;
-}
-
-
-
-.preview-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 8px;
-  color: #374151;
-}
-
-.preview-row.receive {
-  color: #15803d;
-  font-size: 18px;
-}
-
-.preview-arrow {
-  text-align: center;
-  margin: 12px 0;
-}
-
-.preview-arrow i {
-  font-size: 20px;
-  color: #22c55e;
-}
-
-/* Submit Button */
-.swap-btn {
-  width: 100%;
-  background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
-  color: white;
-  border: none;
-  padding: 16px 24px;
-  border-radius: 16px;
-  font-size: 16px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  margin-bottom: 20px;
-}
-
-.swap-btn:hover:not(:disabled) {
-  background: linear-gradient(135deg, #5b56f0 0%, #4338ca 100%);
-  transform: translateY(-1px);
-  box-shadow: 0 8px 25px rgba(99, 102, 241, 0.3);
-}
-
-.swap-btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-  transform: none;
-}
-
-/* Message */
-.message {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 12px 16px;
-  border-radius: 12px;
-  font-weight: 500;
-}
-
-.message.success {
-  background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
-  color: #15803d;
-  border: 1px solid #bbf7d0;
-}
-
-.message.error {
-  background: linear-gradient(135deg, #fef2f2 0%, #fecaca 100%);
-  color: #dc2626;
-  border: 1px solid #fca5a5;
-}
-
-/* Loading Card */
-.loading-card {
-  background: rgba(255, 255, 255, 0.9);
-  border-radius: 24px;
-  padding: 40px;
-  text-align: center;
-  color: #6b7280;
-}
-
-.loading-card i {
-  font-size: 48px;
-  margin-bottom: 16px;
-}
-
-/* Animations */
-.spinning {
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
-
-/* Responsive */
-@media (max-width: 480px) {
-  .wrap {
-    padding: 16px;
-  }
-  
-  .main-card {
-    padding: 20px;
-  }
-  
-  .balance-grid {
-    grid-template-columns: 1fr;
-  }
-  
-  .title {
-    font-size: 24px;
-  }
+/* responsive */
+@media (max-width: 360px){
+  .stat .value{ font-size:18px }
 }
 </style>
