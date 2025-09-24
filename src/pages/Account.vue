@@ -7,8 +7,8 @@ const router = useRouter()
 const profile = ref(null)
 const loading = ref(false)
 const errorMsg = ref('')
+const copied = ref(false) // hiệu ứng nhỏ khi copy
 
-// tải profile từ API server (đọc supabase)
 async function loadProfile() {
   try {
     loading.value = true
@@ -30,28 +30,16 @@ const initials = computed(() => {
   return (s || 'U').toUpperCase()
 })
 
-function showToast(message) {
-  const toast = document.createElement('div')
-  toast.className = 'toast'
-  toast.textContent = message
-  document.body.appendChild(toast)
-  requestAnimationFrame(() => toast.classList.add('show'))
-  setTimeout(() => {
-    toast.classList.remove('show')
-    setTimeout(() => toast.remove(), 250)
-  }, 1600)
-}
-
-function copyUID() {
+async function copyUID() {
   const id = profile.value?.id
   if (!id) return
-  navigator.clipboard?.writeText(String(id))
-  showToast('Đã sao chép UID')
+  try { await navigator.clipboard?.writeText(String(id)) } catch {}
+  copied.value = true
+  setTimeout(() => (copied.value = false), 800)
 }
 
 function goWithdraw() { router.push({ name: 'withdraw' }) }
 function goSwap()     { router.push({ name: 'swap' }) }
-
 function openSupport() {
   const url = 'https://t.me/your_support_channel'
   if (window.Telegram?.WebApp?.openTelegramLink) {
@@ -102,20 +90,19 @@ onMounted(loadProfile)
           </div>
 
           <div class="uinfo">
-            <div class="name">
-              {{ profile?.first_name }} {{ profile?.last_name }}
-            </div>
+            <div class="name">{{ profile?.first_name }} {{ profile?.last_name }}</div>
             <div class="row">
               <span class="chip">UID: {{ profile?.id }}</span>
               <button class="icon-btn" title="Sao chép UID" @click="copyUID">
-                <i class="bi bi-clipboard"></i>
+                <i v-if="!copied" class="bi bi-clipboard"></i>
+                <i v-else class="bi bi-check2"></i>
               </button>
             </div>
             <div v-if="profile?.username" class="handle">@{{ profile.username }}</div>
           </div>
         </section>
 
-        <!-- Stats: 2 cột cân -->
+        <!-- 2 cột số dư -->
         <section class="grid-2">
           <div class="stat htw">
             <div class="label">HTW</div>
@@ -134,7 +121,7 @@ onMounted(loadProfile)
           </div>
         </section>
 
-        <!-- Features -->
+        <!-- Danh sách chức năng -->
         <section class="list">
           <button class="item" @click="openSupport">
             <span class="ic ic-support"><i class="bi bi-headset"></i></span>
@@ -171,45 +158,48 @@ onMounted(loadProfile)
 </template>
 
 <style scoped>
-/* ====== Theme ====== */
+* { box-sizing: border-box; }
+
+/* ===== Theme ===== */
 .page {
   --bg: #0b0f1a;
-  --card: #111827;
-  --card-2: #0f172a;
+  --card: #101826;
+  --card-2: #0d1422;
   --text: #e5e7eb;
-  --muted: #9ca3af;
-  --ring: 0 0 0 1px rgba(148, 163, 184, .14);
+  --muted: #9aa3b2;
+  --ring: 0 0 0 1px rgba(148,163,184,.14);
   --brand: #60a5fa;
-  --accent: #8b5cf6;
   --green: #10b981;
   --red: #ef4444;
 
   background: var(--bg);
   color: var(--text);
-  min-height: 100vh;
+  min-height: 100dvh;            /* full màn hình, chống nhảy thanh URL */
+  display: flex;
+  flex-direction: column;
 }
 
-/* ====== Layout ====== */
+/* ===== Header ===== */
 .top {
   position: sticky; top: 0; z-index: 10;
-  background: linear-gradient(180deg, rgba(11,15,26,.9), rgba(11,15,26,.6) 80%, transparent);
+  padding: calc(10px + env(safe-area-inset-top)) 16px 8px;
+  background: linear-gradient(180deg, rgba(11,15,26,.96), rgba(11,15,26,.7) 70%, transparent);
   backdrop-filter: blur(8px);
-  padding: 14px 18px 6px;
 }
 .top h1 {
-  font-size: 22px; font-weight: 800; letter-spacing: .2px;
-  margin: 0;
+  font-size: 20px; font-weight: 800; letter-spacing: .2px;
+  text-align: center; margin: 0;
 }
 
+/* ===== Main container ===== */
 .container {
-  max-width: 440px;
-  padding: 16px 18px 88px;
-  margin: 0 auto;
+  flex: 1;
+  width: 100%;
+  padding: 12px 16px calc(96px + env(safe-area-inset-bottom));
 }
 
+/* ===== Common ===== */
 .stack { display: grid; gap: 14px; }
-
-/* ====== Cards / common ====== */
 .card {
   background: var(--card);
   border-radius: 16px;
@@ -217,17 +207,17 @@ onMounted(loadProfile)
   box-shadow: var(--ring);
 }
 
-/* ====== User ====== */
+/* ===== User card ===== */
 .user {
   display: grid; grid-template-columns: 72px 1fr; gap: 12px; align-items: center;
 }
-.avatar-wrap { position: relative; width: 72px; height: 72px; }
+.avatar-wrap { position: relative; width:72px; height:72px; }
 .avatar {
   width: 72px; height: 72px; border-radius: 50%;
   display: grid; place-items: center;
   background: linear-gradient(145deg, #1f2937, #0b1220);
   border: 1px solid rgba(148,163,184,.18);
-  font-weight: 800; font-size: 22px;
+  font: 800 22px/1 ui-sans-serif, system-ui;
 }
 .online {
   position: absolute; right: 4px; bottom: 4px;
@@ -235,11 +225,11 @@ onMounted(loadProfile)
   background: var(--green); border: 2px solid var(--card);
   box-shadow: 0 0 0 2px rgba(16,185,129,.25);
 }
-.uinfo .name { font-weight: 700; font-size: 16px; margin-bottom: 4px; }
-.row { display: flex; align-items: center; gap: 8px; }
+.uinfo .name { font-weight:700; font-size:16px; margin-bottom:4px; }
+.row { display:flex; align-items:center; gap:8px; }
 .chip {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
-  font-size: 12px; color: var(--muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size:12px; color: var(--muted);
   background: var(--card-2);
   padding: 4px 8px; border-radius: 8px; border: 1px solid rgba(148,163,184,.12);
 }
@@ -251,7 +241,7 @@ onMounted(loadProfile)
 .icon-btn:hover { background: rgba(148,163,184,.08); }
 .handle { color: var(--brand); font-size: 13px; margin-top: 4px; }
 
-/* ====== Stats (2 columns) ====== */
+/* ===== 2 columns balance ===== */
 .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .stat {
   border-radius: 16px; padding: 14px;
@@ -270,11 +260,11 @@ onMounted(loadProfile)
 .stat.htw { background: linear-gradient(180deg, #1b1530 0%, #151222 100%); }
 .stat.vnd { background: linear-gradient(180deg, #0c2437 0%, #0b1b2b 100%); }
 
-/* ====== List features ====== */
+/* ===== Feature list ===== */
 .list { display: grid; gap: 10px; }
 .item {
   display: grid; grid-template-columns: 44px 1fr 18px; align-items: center;
-  gap: 12px; padding: 12px 12px; border-radius: 14px;
+  gap: 12px; padding: 12px; border-radius: 14px;
   background: var(--card); border: 1px solid rgba(148,163,184,.12);
   text-align: left;
 }
@@ -286,19 +276,18 @@ onMounted(loadProfile)
 .ic-support  { background: linear-gradient(145deg, #0ea5e9, #2563eb); }
 .ic-withdraw { background: linear-gradient(145deg, #059669, #10b981); }
 .ic-swap     { background: linear-gradient(145deg, #7c3aed, #8b5cf6); }
-
 .meta .title { font-weight: 700; font-size: 14px; }
 .meta .sub   { font-size: 12px; color: var(--muted); margin-top: 2px; }
 .chev { color: var(--muted); }
 
-/* ====== Error ====== */
+/* ===== Error ===== */
 .error {
   display: grid; place-items: center; text-align: center;
   gap: 8px; padding: 56px 12px; color: var(--muted);
 }
 .error i { font-size: 28px; color: var(--red); }
 
-/* ====== Skeleton ====== */
+/* ===== Skeleton ===== */
 .skeleton { display: grid; gap: 14px; }
 .sk-card, .sk-item {
   background: linear-gradient(90deg, rgba(255,255,255,.06), rgba(255,255,255,.12), rgba(255,255,255,.06));
@@ -314,15 +303,7 @@ onMounted(loadProfile)
   100% { background-position: -200% 0; }
 }
 
-/* ====== Toast ====== */
-:global(.toast) {
-  position: fixed; left:50%; top: 18px; transform: translate(-50%, -18px);
-  background: #111827; color: var(--text); border: 1px solid rgba(148,163,184,.18);
-  padding: 10px 14px; border-radius: 12px; opacity: 0; transition: .25s ease; z-index: 1000;
-}
-:global(.toast.show) { opacity: 1; transform: translate(-50%, 0); }
-
-/* ====== Responsive ====== */
+/* ===== Responsive ===== */
 @media (max-width: 360px) {
   .grid-2 { grid-template-columns: 1fr; }
 }
