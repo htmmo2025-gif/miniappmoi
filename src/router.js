@@ -1,4 +1,3 @@
-// src/router.js
 import { createRouter, createWebHistory } from 'vue-router'
 import Loading from './pages/Loading.vue'
 import Mining from './pages/Mining.vue'
