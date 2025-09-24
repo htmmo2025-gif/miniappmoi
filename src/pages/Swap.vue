@@ -8,7 +8,7 @@ const msg = ref('')
 const busy = ref(false)
 
 async function loadProfile() {
-  const r = await fetch('/api/profile')
+  const r = await fetch('/api/profile', { credentials: 'include' })
   if (r.ok) prof.value = await r.json()
 }
 const vnd = computed(() => {
@@ -23,6 +23,7 @@ async function submit() {
   const r = await fetch('/api/swap', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
     body: JSON.stringify({ amount_htw: n, rate: RATE })
   })
   busy.value = false
