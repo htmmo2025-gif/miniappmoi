@@ -2,17 +2,18 @@
 import { ref, onMounted } from 'vue'
 import BottomNav from '../components/BottomNav.vue'
 
-/* ================= ENV =================
+/* ========= ENV =========
    Bạn có thể đặt:
-   - VITE_ADSGRAM_BLOCK_ID = 15248        (tự đổi thành task-15248)
-   - hoặc VITE_ADSGRAM_BLOCK_ID = task-15248 (giữ nguyên)
-   - nếu là interstitial sau này: int-xxxxx
+   - VITE_ADSGRAM_BLOCK_ID = 15248         (Task block → đúng)
+   - VITE_ADSGRAM_BLOCK_ID = task-15248    (tự chuyển thành 15248)
+   - VITE_ADSGRAM_BLOCK_ID = int-98765     (Interstitial → giữ nguyên)
 */
 const rawId = String(import.meta.env.VITE_ADSGRAM_BLOCK_ID ?? '').trim()
 const blockId =
-  /^(task|int)-\d+$/i.test(rawId) ? rawId :
-  /^\d+$/.test(rawId) ? `task-${rawId}` :
-  '' // sai định dạng -> coi như thiếu
+  /^int-\d+$/i.test(rawId) ? rawId :                 // interstitial hỗ trợ int-xxxxx
+  /^task-\d+$/i.test(rawId) ? rawId.replace(/^task-/i, '') : // task-xxxxx → "xxxxx"
+  /^\d+$/.test(rawId) ? rawId :                      // số thuần → OK
+  ''                                                 // sai định dạng
 
 // Chỉ để hiển thị (server quyết định thưởng thật)
 const rewardUi = Number(import.meta.env.VITE_ADSGRAM_REWARD_HTW ?? 1)
@@ -54,8 +55,8 @@ function loadAdsgramSdk () {
 let adCtrl = null
 async function ensureAdCtrl () {
   await loadAdsgramSdk()
-  if (!blockId) throw new Error('Thiếu hoặc sai VITE_ADSGRAM_BLOCK_ID (cần dạng task-XXXXX)')
-  if (!adCtrl) adCtrl = window.Adsgram?.init({ blockId }) // ví dụ: task-15248
+  if (!blockId) throw new Error('Thiếu/sai VITE_ADSGRAM_BLOCK_ID (Task: số thuần; Interstitial: int-XXXXX)')
+  if (!adCtrl) adCtrl = window.Adsgram?.init({ blockId }) // ví dụ "15248" hoặc "int-12345"
   if (!adCtrl) throw new Error('Không khởi tạo được Adsgram')
   return adCtrl
 }
@@ -67,7 +68,7 @@ async function showAd () {
     rewarding.value = true
     await ctrl.show()
 
-    // Xem xong -> gọi server cộng HTW
+    // Xem xong → gọi server cộng HTW
     const r = await fetch('/api/tasks/adsgram-reward', {
       method: 'POST',
       credentials: 'include'
@@ -119,7 +120,7 @@ onMounted(loadProfile)
         </button>
 
         <p v-if="!blockId" class="warn">
-          Thiếu <b>VITE_ADSGRAM_BLOCK_ID</b> (hãy đặt <code>task-XXXXX</code> hoặc số <em>XXXXX</em>).
+          Thiếu <b>VITE_ADSGRAM_BLOCK_ID</b> (Task: nhập số <code>XXXXX</code>; Interstitial: <code>int-XXXXX</code>).
         </p>
         <p v-if="msg" class="note err"><i class="bi bi-exclamation-circle"></i> {{ msg }}</p>
       </section>
@@ -128,7 +129,7 @@ onMounted(loadProfile)
         <div class="title"><i class="bi bi-info-circle"></i> Lưu ý</div>
         <ul>
           <li>Nếu ad không hiện, hãy thử lại sau vài phút hoặc kiểm tra trạng thái duyệt block trên Adsgram.</li>
-          <li>Hãy điền <b>Reward URL</b> trong Adsgram để chống gian lận tốt hơn.</li>
+          <li>Đặt <b>Reward URL</b> trong Adsgram để chống gian lận tốt hơn.</li>
         </ul>
       </section>
     </main>
