@@ -1,5 +1,6 @@
+// api/tg/verify.js
 import crypto from 'node:crypto'
-import { supa } from '../_supa.js'   // <— dùng server client
+import { supa } from '../_supa.js'
 
 const BOT_TOKEN = process.env.BOT_TOKEN
 
@@ -10,19 +11,23 @@ function isValid(initData) {
   const str = [...initData.entries()]
     .sort(([a],[b]) => a.localeCompare(b))
     .map(([k,v]) => `${k}=${v}`).join('\n')
-
   const secret = crypto.createHmac('sha256','WebAppData').update(BOT_TOKEN).digest()
-  const hmac = crypto.createHmac('sha256', secret).update(str).digest('hex')
+  const hmac   = crypto.createHmac('sha256', secret).update(str).digest('hex')
   return crypto.timingSafeEqual(Buffer.from(hmac), Buffer.from(hash))
 }
 
 export default async (req, res) => {
   try {
-    const qs = req.url?.split('?')[1] || ''
-    const initData = new URLSearchParams(qs)
+    const url = new URL(req.url, 'https://x')
+    if (!url.searchParams.has('hash')) {
+      // gọi từ bot (vercel-screenshot) hoặc mở ngoài Telegram → bỏ qua để khỏi 401
+      return res.status(204).end()
+    }
+
+    const initData = new URLSearchParams(url.searchParams)
     if (!isValid(initData)) return res.status(401).send('bad initData')
 
-    const u = JSON.parse(initData.get('user') || '{}') || {}
+    const u   = JSON.parse(initData.get('user') || '{}') || {}
     const ref = initData.get('start_param') || initData.get('startapp') || null
     const refId = ref && /^\d+$/.test(ref) ? Number(ref) : null
 
