@@ -96,8 +96,6 @@ onMounted(() => Promise.all([loadProfile(), loadList()]))
 
       <!-- Form -->
       <section class="card">
-        <div class="section-title"><i class="bi bi-send"></i> Tạo lệnh rút tiền</div>
-
         <div class="group">
           <label class="lbl"><i class="bi bi-currency-dollar"></i> Số tiền muốn rút</label>
           <div class="amt-row">
@@ -105,7 +103,6 @@ onMounted(() => Promise.all([loadProfile(), loadList()]))
               class="amt"
               v-model="amount"
               type="number"
-              inputmode="numeric"
               pattern="[0-9]*"
               min="1" step="1000" placeholder="0"
             />
@@ -114,7 +111,7 @@ onMounted(() => Promise.all([loadProfile(), loadList()]))
 
           <div class="chip-grid">
             <button
-              v-for="a in [50000,100000,200000,500000]"
+              v-for="a in [2000,10000,20000,50000]"
               :key="a"
               class="chip"
               type="button"
@@ -124,13 +121,11 @@ onMounted(() => Promise.all([loadProfile(), loadList()]))
         </div>
 
         <div class="group box">
-          <div class="mini-title"><i class="bi bi-bank"></i> Thông tin ngân hàng</div>
-
           <label class="lbl"><i class="bi bi-building"></i> Tên ngân hàng</label>
           <input class="txt" v-model="bankName" placeholder="VD: Vietcombank, BIDV, Techcombank..." />
 
           <label class="lbl"><i class="bi bi-credit-card-2-front"></i> Số tài khoản</label>
-          <input class="txt" v-model="dest" type="number" inputmode="numeric" placeholder="1234567890" />
+          <input class="txt" v-model="dest" type="number"  placeholder="1234567890" />
 
           <label class="lbl"><i class="bi bi-person"></i> Tên chủ tài khoản</label>
           <input class="txt up" v-model="accountName" placeholder="NGUYEN VAN A" />
@@ -239,7 +234,6 @@ onMounted(() => Promise.all([loadProfile(), loadList()]))
   color:#a3b2c7; font-weight:700;
 }
 .box{background:#0c1424; border-radius:14px; padding:12px; border:var(--ring)}
-.mini-title{display:flex;align-items:center;gap:8px;font-weight:800;margin-bottom:8px}
 .txt{
   width:100%; padding:12px 14px; border-radius:12px; border:var(--ring); background:#0f172a; color:#fff;
 }
