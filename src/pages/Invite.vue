@@ -1,4 +1,5 @@
 <script setup>
+import BottomNav from '../components/BottomNav.vue'
 const tg = window.Telegram?.WebApp
 const link = location.origin + '/?startapp=' + (tg?.initDataUnsafe?.user?.id || '')
 </script>
@@ -10,6 +11,5 @@ const link = location.origin + '/?startapp=' + (tg?.initDataUnsafe?.user?.id || 
       <div style="word-break:break-all;color:#fff;margin-top:8px">{{ link }}</div>
     </div>
   </div>
-  <component is="../components/BottomNav.vue"/>
   <BottomNav/>
 </template>
