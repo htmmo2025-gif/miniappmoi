@@ -12,8 +12,8 @@ export default async function handler(req, res) {
     if (!uid) return res.status(401).send('Unauthorized');
     if (req.method !== 'GET') return res.status(405).send('Method not allowed');
 
-    const botUser = (process.env.BOT_USERNAME || '').replace(/^@/, '');
-    const share_link = botUser ? `https://t.me/${botUser}?startapp=${uid}` : '';
+    const botUser = (process.env.BOT_USERNAME || '').replace(/^@/, '')
+    const share_link = botUser ? `https://t.me/${botUser}/app?startapp=${uid}` : ''
 
     // danh sách F1
     const { data: list, error } = await supa

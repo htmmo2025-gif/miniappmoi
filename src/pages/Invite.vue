@@ -1,5 +1,6 @@
 <script setup>
 import { ref, onMounted, computed } from 'vue'
+import BottomNav from '../components/BottomNav.vue'
 
 const loading = ref(true)
 const msg = ref('')
@@ -49,7 +50,6 @@ onMounted(load)
 <template>
   <div class="page">
     <header class="topbar">
-      <button class="back" @click="$router.go(-1)"><i class="bi bi-arrow-left"></i></button>
       <h1>Mời bạn bè</h1>
       <span class="spacer"></span>
     </header>
@@ -128,6 +128,7 @@ onMounted(load)
       </section>
     </main>
   </div>
+  <BottomNav/>
 </template>
 
 <style scoped>
@@ -146,10 +147,6 @@ onMounted(load)
   backdrop-filter: blur(8px);
 }
 .topbar h1{margin:0; font:800 20px/1 ui-sans-serif,system-ui}
-.back{
-  width:36px;height:36px;border-radius:50%;border:var(--ring);background:#0e1726;
-  display:grid;place-items:center;color:#cbd5e1;
-}
 .spacer{flex:1}
 
 .wrap{
