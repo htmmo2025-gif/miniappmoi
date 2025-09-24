@@ -3,21 +3,13 @@ import { ref, onMounted, computed } from 'vue'
 
 const prof = ref(null)
 const amount = ref('')
-const channel = ref('momo')
+const channel = ref('bank')
 const dest = ref('')
+const bankName = ref('')
+const accountName = ref('')
 const msg = ref('')
 const busy = ref(false)
 const items = ref([])
-
-const channelOptions = [
-  { value: 'momo', label: 'MoMo', icon: 'bi-phone', color: '#b91c5c' },
-  { value: 'bank', label: 'Ngân hàng', icon: 'bi-bank', color: '#0369a1' },
-  { value: 'usdt', label: 'USDT (TRC20)', icon: 'bi-currency-bitcoin', color: '#059669' }
-]
-
-const currentChannel = computed(() => 
-  channelOptions.find(c => c.value === channel.value) || channelOptions[0]
-)
 
 const getStatusClass = (status) => {
   switch(status) {
@@ -64,8 +56,8 @@ async function submit() {
     return
   }
   
-  if (!dest.value.trim()) {
-    msg.value = 'Vui lòng nhập thông tin nhận tiền'
+  if (!dest.value.trim() || !bankName.value.trim() || !accountName.value.trim()) {
+    msg.value = 'Vui lòng điền đầy đủ thông tin ngân hàng'
     busy.value = false
     return
   }
@@ -78,7 +70,9 @@ async function submit() {
       body: JSON.stringify({ 
         amount_vnd: n, 
         channel: channel.value, 
-        dest: dest.value.trim() 
+        dest: dest.value.trim(),
+        bank_name: bankName.value.trim(),
+        account_name: accountName.value.trim()
       })
     })
     
@@ -88,6 +82,8 @@ async function submit() {
     
     amount.value = ''
     dest.value = ''
+    bankName.value = ''
+    accountName.value = ''
     await Promise.all([loadProfile(), loadList()])
     msg.value = 'Tạo lệnh rút thành công! Chờ xử lý...'
     
@@ -182,49 +178,59 @@ onMounted(async () => {
             </div>
           </div>
 
-          <!-- Channel Selection -->
-          <div class="input-group">
-            <label class="input-label">
-              <i class="bi bi-credit-card"></i>
-              Phương thức nhận tiền
-            </label>
-            <div class="channel-selector">
-              <button
-                v-for="option in channelOptions"
-                :key="option.value"
-                :class="['channel-option', { active: channel === option.value }]"
-                @click="channel = option.value"
-                type="button"
-              >
-                <div class="channel-icon" :style="{ backgroundColor: option.color }">
-                  <i :class="option.icon"></i>
-                </div>
-                <span>{{ option.label }}</span>
-              </button>
+          <!-- Bank Information -->
+          <div class="bank-info-section">
+            <div class="section-title">
+              <i class="bi bi-bank"></i>
+              Thông tin ngân hàng
             </div>
-          </div>
+            
+            <!-- Bank Name -->
+            <div class="input-group">
+              <label class="input-label">
+                <i class="bi bi-building"></i>
+                Tên ngân hàng
+              </label>
+              <input 
+                class="text-input"
+                v-model="bankName" 
+                placeholder="VD: Vietcombank, BIDV, Techcombank..."
+              />
+            </div>
 
-          <!-- Destination Input -->
-          <div class="input-group">
-            <label class="input-label">
-              <i :class="currentChannel.icon"></i>
-              <span v-if="channel === 'momo'">Số điện thoại MoMo</span>
-              <span v-else-if="channel === 'bank'">Số tài khoản ngân hàng</span>
-              <span v-else>Địa chỉ USDT (TRC20)</span>
-            </label>
-            <input 
-              class="text-input"
-              v-model="dest" 
-              :placeholder="channel === 'momo' ? '0901234567' : 
-                          channel === 'bank' ? '1234567890' : 
-                          'TRC20 Address'"
-            />
+            <!-- Account Number -->
+            <div class="input-group">
+              <label class="input-label">
+                <i class="bi bi-credit-card-2-front"></i>
+                Số tài khoản
+              </label>
+              <input 
+                class="text-input"
+                v-model="dest" 
+                placeholder="1234567890"
+                type="number"
+              />
+            </div>
+
+            <!-- Account Name -->
+            <div class="input-group">
+              <label class="input-label">
+                <i class="bi bi-person"></i>
+                Tên chủ tài khoản
+              </label>
+              <input 
+                class="text-input"
+                v-model="accountName" 
+                placeholder="NGUYEN VAN A"
+                style="text-transform: uppercase;"
+              />
+            </div>
           </div>
 
           <!-- Submit Button -->
           <button 
             class="submit-btn"
-            :disabled="busy || !amount || !dest"
+            :disabled="busy || !amount || !dest || !bankName || !accountName"
             @click="submit"
           >
             <div class="btn-content">
@@ -262,18 +268,18 @@ onMounted(async () => {
               class="transaction-item"
             >
               <div class="transaction-left">
-                <div class="transaction-icon" :style="{ 
-                  backgroundColor: channelOptions.find(c => c.value === item.channel)?.color || '#6b7280' 
-                }">
-                  <i :class="channelOptions.find(c => c.value === item.channel)?.icon || 'bi-arrow-up-right'"></i>
+                <div class="transaction-icon">
+                  <i class="bi bi-bank"></i>
                 </div>
                 <div class="transaction-info">
                   <div class="transaction-amount">
                     -{{ Number(item.amount_vnd).toLocaleString() }} VND
                   </div>
                   <div class="transaction-details">
-                    {{ channelOptions.find(c => c.value === item.channel)?.label || item.channel }}
-                    → {{ item.dest }}
+                    {{ item.bank_name || 'Ngân hàng' }} - {{ item.dest }}
+                  </div>
+                  <div class="transaction-account">
+                    {{ item.account_name || 'Tên tài khoản' }}
                   </div>
                   <div class="transaction-date">
                     {{ formatDate(item.created_at) }}
@@ -503,51 +509,25 @@ onMounted(async () => {
   color: #4ecdc4;
 }
 
-/* Channel Selector */
-.channel-selector {
-  display: flex;
-  gap: 12px;
+/* Bank Info Section */
+.bank-info-section {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 16px;
+  padding: 20px;
+  margin-bottom: 24px;
 }
 
-.channel-option {
-  flex: 1;
-  background: rgba(255, 255, 255, 0.05);
-  border: 2px solid rgba(255, 255, 255, 0.1);
-  border-radius: 16px;
-  padding: 16px 12px;
+.section-title {
   display: flex;
-  flex-direction: column;
   align-items: center;
   gap: 8px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  text-align: center;
-}
-
-.channel-option.active {
-  border-color: #4ecdc4;
-  background: rgba(78, 205, 196, 0.1);
-}
-
-.channel-option:hover {
-  background: rgba(255, 255, 255, 0.1);
-}
-
-.channel-icon {
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
   font-size: 16px;
+  font-weight: 700;
   color: #ffffff;
-}
-
-.channel-option span {
-  font-size: 13px;
-  font-weight: 600;
-  color: #ffffff;
+  margin-bottom: 20px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
 }
 
 /* Text Input */
@@ -700,6 +680,7 @@ onMounted(async () => {
 .transaction-icon {
   width: 40px;
   height: 40px;
+  background: linear-gradient(135deg, #0369a1, #0284c7);
   border-radius: 12px;
   display: flex;
   align-items: center;
@@ -723,6 +704,13 @@ onMounted(async () => {
   font-size: 13px;
   color: #8b8b8b;
   margin-bottom: 2px;
+}
+
+.transaction-account {
+  font-size: 12px;
+  color: #6b6b6b;
+  margin-bottom: 2px;
+  font-weight: 600;
 }
 
 .transaction-date {
@@ -766,18 +754,12 @@ onMounted(async () => {
     padding: 20px;
   }
   
-  .channel-selector {
-    flex-direction: column;
-  }
-  
-  .channel-option {
-    flex-direction: row;
-    justify-content: flex-start;
-    padding: 16px;
-  }
-  
   .quick-amounts {
     flex-wrap: wrap;
+  }
+  
+  .bank-info-section {
+    padding: 16px;
   }
 }
 </style>
