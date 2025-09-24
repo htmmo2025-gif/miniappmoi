@@ -104,7 +104,6 @@ onMounted(loadProfile)
             step="0.001"
             placeholder="0.000"
           />
-          <span class="suf">HTW</span>
           <button class="pill" type="button" @click="fillMax">Tối đa</button>
         </div>
         <div class="hint">Sẽ nhận: <b>{{ vnd.toLocaleString() }}</b> VND</div>

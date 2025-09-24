@@ -1,36 +1,59 @@
-import { supa } from './_supa.js'
+// /api/swap.js
+import { supa } from './_supa.js'   // server client dùng SERVICE_ROLE_KEY
 
-async function readJson(req) {
-  let body = ''
-  for await (const c of req) body += c
-  return body ? JSON.parse(body) : {}
+const RATE = 3; // 1 HTW = 3 VND (cứng ở server, không tin dữ liệu client)
+
+function getUidFromCookie(req) {
+  const m = (req.headers.cookie || '').match(/(?:^|;\s*)tg_uid=(\d+)/);
+  return m ? Number(m[1]) : null;
 }
 
-export default async (req, res) => {
-  const uid = Number((req.headers.cookie || '').match(/tg_uid=(\d+)/)?.[1])
-  if (!uid) return res.status(401).send('no uid')
-  if (req.method !== 'POST') return res.status(405).send('method not allowed')
-
+export default async function handler(req, res) {
   try {
-    const { amount_htw, rate } = await readJson(req)
-    const amt = Number(amount_htw)
-    const r   = Number(rate ?? 36)
-    if (!Number.isFinite(amt) || amt <= 0) return res.status(400).send('bad amount')
-    if (amt < 0.001) return res.status(400).send('min 0.001 HTW')
-
-    const { data, error } = await supa.rpc('swap_htw_to_vnd', {
-      p_user_id: uid,
-      p_amount: amt,
-      p_rate: r
-    })
-    if (error) {
-      const msg = String(error.message || error).toLowerCase()
-      if (msg.includes('insufficient')) return res.status(409).send('insufficient')
-      return res.status(500).send('swap error')
+    if (req.method !== 'POST') {
+      return res.status(405).send('Method not allowed');
     }
-    res.json({ ok: true, user: data })
+
+    const uid = getUidFromCookie(req);
+    if (!uid) return res.status(401).send('Unauthorized');
+
+    const { amount_htw } = (typeof req.body === 'object' && req.body) || {};
+    const amt = Number(amount_htw);
+
+    if (!Number.isFinite(amt) || amt <= 0) {
+      return res.status(400).send('Invalid amount');
+    }
+
+    // Giới hạn 3 chữ số thập phân cho HTW để “đẹp” & tránh precision noise
+    const amt3 = Math.floor(amt * 1000) / 1000;
+
+    // Gọi RPC atomic
+    const { data, error } = await supa.rpc('swap_htw_vnd', {
+      p_uid: uid,
+      p_amt: amt3,
+      p_rate: RATE
+    });
+
+    if (error) {
+      console.error('swap rpc error', error);
+      return res.status(500).send('Supabase error');
+    }
+
+    const row = Array.isArray(data) ? data[0] : null;
+    if (!row || row.ok !== true) {
+      // Không đủ số dư hoặc user không tồn tại
+      return res.status(400).send('Insufficient HTW balance');
+    }
+
+    // Trả về số dư mới để frontend refresh
+    return res.status(200).json({
+      ok: true,
+      rate: RATE,
+      htw_balance: row.new_htw,
+      vnd_balance: row.new_vnd
+    });
   } catch (e) {
-    console.error('swap error', e)
-    res.status(500).send('server error')
+    console.error('swap exception', e);
+    return res.status(500).send('Server error');
   }
 }
