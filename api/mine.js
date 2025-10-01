@@ -2,7 +2,7 @@
 import { supa } from './_supa.js';
 
 const COOLDOWN = 1800; // 30 phút (giây)
-const REWARD = 0;     // 20 HTW mỗi lần
+const REWARD = 20;     // 20 HTW mỗi lần
 
 function getUidFromCookie(req) {
   const m = (req.headers.cookie || '').match(/(?:^|;\s*)tg_uid=(\d+)/);
