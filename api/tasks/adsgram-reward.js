@@ -1,7 +1,7 @@
 // /api/tasks/adsgram-reward.js
 import { supa } from '../_supa.js'
 
-const REWARD = Number(process.env.ADSGRAM_REWARD_HTW || 1)
+const REWARD = Number(process.env.ADSGRAM_REWARD_HTW || 0)
 // chống spam: 1 lần / 45s
 const COOLDOWN_SEC = 45
 

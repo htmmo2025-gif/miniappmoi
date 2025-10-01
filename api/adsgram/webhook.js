@@ -1,6 +1,6 @@
 // /api/adsgram/webhook.js
 import { supa } from '../_supa.js'
-const REWARD = Number(process.env.ADSGRAM_REWARD_HTW || 1)
+const REWARD = Number(process.env.ADSGRAM_REWARD_HTW || 0)
 const COOLDOWN_SEC = 45
 
 export default async (req, res) => {
