@@ -8,25 +8,53 @@ const state = ref({
   remaining: 0,
   htw_balance: 0,
 })
+
 const busy = ref(false)
 const loading = ref(true)
 const msg = ref('')
-let timerId = null
 
+let timerId = null
 const canClaim = computed(() => !busy.value && state.value.remaining <= 0)
 
-function startTicker() {
+/* ========= Reward Ad (Adsgram) ========= */
+const rewardBlockId = String(import.meta.env.VITE_ADSGRAM_REWARD_BLOCK_ID || '')
+const REWARD_SDK_URL = 'https://sad.adsgram.ai/js/sad.min.js'
+const loadingRewardSdk = ref(false)
+
+function loadRewardSdk() {
+  if ([...document.scripts].some(s => s.src === REWARD_SDK_URL)) return Promise.resolve()
+  loadingRewardSdk.value = true
+  return new Promise((resolve, reject) => {
+    const s = document.createElement('script')
+    s.src = REWARD_SDK_URL
+    s.async = true
+    s.onload = () => { loadingRewardSdk.value = false; resolve() }
+    s.onerror = (e) => { loadingRewardSdk.value = false; reject(e) }
+    document.head.appendChild(s)
+  })
+}
+
+async function showRewardAd() {
+  if (!rewardBlockId) throw new Error('Thiếu VITE_ADSGRAM_REWARD_BLOCK_ID')
+  await loadRewardSdk()
+  const ctrl = window.Adsgram?.init?.({ blockId: String(rewardBlockId) })
+  if (!ctrl) throw new Error('Không khởi tạo được Adsgram Reward')
+  // Nếu người dùng không xem hết/đóng sớm, SDK có thể reject → coi là thất bại
+  await ctrl.show()
+}
+
+/* ============ Mining logic ============ */
+function startTicker () {
   stopTicker()
   timerId = setInterval(() => {
-    if (state.value.remaining > 0) {
-      state.value.remaining--
-    }
+    if (state.value.remaining > 0) state.value.remaining--
   }, 1000)
 }
-function stopTicker() { if (timerId) { clearInterval(timerId); timerId = null } }
+function stopTicker () { if (timerId) { clearInterval(timerId); timerId = null } }
 
-async function loadStatus() {
+async function loadStatus () {
   loading.value = true
+  msg.value = ''
   try {
     const r = await fetch('/api/mine', { credentials: 'include' })
     if (!r.ok) throw new Error(await r.text())
@@ -46,15 +74,18 @@ async function loadStatus() {
   }
 }
 
-async function claim() {
+async function claim () {
   if (!canClaim.value) return
   busy.value = true
   msg.value = ''
   try {
-    const r = await fetch('/api/mine', {
-      method: 'POST',
-      credentials: 'include'
+    // 1) Bắt buộc xem Reward ad trước khi claim
+    await showRewardAd().catch((e) => {
+      throw new Error(e?.message || 'Vui lòng xem quảng cáo để claim.')
     })
+
+    // 2) Sau khi xem xong mới gọi API claim
+    const r = await fetch('/api/mine', { method: 'POST', credentials: 'include' })
     const data = await r.json().catch(() => ({}))
     if (!r.ok || data?.ok !== true) {
       const remain = Number(data?.remaining ?? state.value.cooldown)
@@ -63,18 +94,20 @@ async function claim() {
       return
     }
     // Claim thành công
-    state.value.htw_balance = Number(data.htw_balance ?? state.value.htw_balance + state.value.reward)
+    state.value.htw_balance = Number(
+      data.htw_balance ?? state.value.htw_balance + state.value.reward
+    )
     state.value.remaining = state.value.cooldown
     msg.value = `Nhận +${state.value.reward} HTW thành công!`
   } catch (e) {
     console.error(e)
-    msg.value = 'Claim thất bại, thử lại sau.'
+    msg.value = e?.message || 'Claim thất bại, thử lại sau.'
   } finally {
     busy.value = false
   }
 }
 
-function fmtTime(sec) {
+function fmtTime (sec) {
   const m = Math.floor(sec / 60).toString().padStart(2, '0')
   const s = Math.floor(sec % 60).toString().padStart(2, '0')
   return `${m}:${s}`
@@ -117,12 +150,21 @@ onUnmounted(stopTicker)
           Còn lại: <b>{{ fmtTime(state.remaining) }}</b>
         </div>
 
-        <button class="btn" :disabled="!canClaim || loading" @click="claim">
-          <i v-if="busy || loading" class="bi bi-arrow-repeat spin"></i>
+        <button
+          class="btn"
+          :disabled="!canClaim || loading || loadingRewardSdk"
+          @click="claim"
+        >
+          <i v-if="busy || loading || loadingRewardSdk" class="bi bi-arrow-repeat spin"></i>
           <i v-else class="bi bi-box-arrow-in-down"></i>
-          <span>{{ state.remaining > 0 ? 'Chưa thể claim' : 'Claim +'+state.reward+' HTW' }}</span>
+          <span>
+            {{ state.remaining > 0 ? 'Chưa thể claim' : 'Claim +' + state.reward + ' HTW' }}
+          </span>
         </button>
 
+        <p v-if="!rewardBlockId" class="note">
+          Thiếu <b>VITE_ADSGRAM_REWARD_BLOCK_ID</b> nên không thể hiển thị quảng cáo Reward.
+        </p>
         <p v-if="msg" class="note">{{ msg }}</p>
       </section>
 
@@ -132,7 +174,7 @@ onUnmounted(stopTicker)
       </section>
     </main>
   </div>
-  <BottomNav/>
+  <BottomNav />
 </template>
 
 <style scoped>
@@ -191,7 +233,5 @@ onUnmounted(stopTicker)
 .spin{animation:spin 1s linear infinite} @keyframes spin{to{transform:rotate(360deg)}}
 
 .note{margin-top:10px; padding:10px 12px; border-radius:10px; background:#0e1525; color:#cbd5e1}
-:global(*), :global(*::before), :global(*::after){ box-sizing: border-box }
-:global(html, body, #app){ margin:0; overflow-x:hidden }
 @media (max-width:360px){ .row{grid-template-columns:1fr} }
 </style>
