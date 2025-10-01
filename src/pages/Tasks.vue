@@ -74,9 +74,12 @@ onMounted(async () => {
     </header>
 
     <main class="wrap">
+
       <!-- Adsgram Task (dùng slots: button / reward / claim / done) -->
       <section class="card">
         <div class="title"><i class="bi bi-badge-ad"></i> Xem quảng cáo</div>
+        <p class="mut">Mỗi lần xem thưởng <b>{{ rewardUi }}</b> HTW.</p>
+
         <adsgram-task
           v-if="sdkReady && blockId"
           ref="ag"
@@ -90,7 +93,7 @@ onMounted(async () => {
 
           <!-- con tem thưởng (reward slot) -->
           <div slot="reward" class="ag-reward">
-            <i class="bi bi-coin"></i><span>+10 HTW</span>
+            <i class="bi bi-coin"></i><span>reward</span>
           </div>
 
           <!-- nút nhận thưởng (claim slot) -->
