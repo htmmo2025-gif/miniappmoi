@@ -74,20 +74,9 @@ onMounted(async () => {
     </header>
 
     <main class="wrap">
-      <!-- Số dư -->
-      <section class="card hero" v-if="prof">
-        <div class="hero-ic"><i class="bi bi-wallet2"></i></div>
-        <div class="hero-t">
-          <div class="lbl">Số dư hiện tại</div>
-          <div class="amt">{{ (prof.htw_balance ?? 0).toLocaleString() }} <span>HTW</span></div>
-        </div>
-      </section>
-
       <!-- Adsgram Task (dùng slots: button / reward / claim / done) -->
       <section class="card">
-        <div class="title"><i class="bi bi-badge-ad"></i> Xem quảng cáo Adsgram</div>
-        <p class="mut">Mỗi lần xem thưởng <b>{{ rewardUi }}</b> HTW.</p>
-
+        <div class="title"><i class="bi bi-badge-ad"></i> Xem quảng cáo</div>
         <adsgram-task
           v-if="sdkReady && blockId"
           ref="ag"
@@ -101,7 +90,7 @@ onMounted(async () => {
 
           <!-- con tem thưởng (reward slot) -->
           <div slot="reward" class="ag-reward">
-            <i class="bi bi-coin"></i><span>reward</span>
+            <i class="bi bi-coin"></i><span>+10 HTW</span>
           </div>
 
           <!-- nút nhận thưởng (claim slot) -->
@@ -117,14 +106,6 @@ onMounted(async () => {
         <p v-else-if="!sdkReady" class="warn">Đang tải SDK Adsgram…</p>
 
         <p v-if="msg" class="note err"><i class="bi bi-exclamation-circle"></i> {{ msg }}</p>
-      </section>
-
-      <section class="card tip">
-        <div class="title"><i class="bi bi-info-circle"></i> Lưu ý</div>
-        <ul>
-          <li>Dùng đúng Block type <b>Task</b> & <code>data-block-id="task-XXXXX"</code>.</li>
-          <li>SDK dùng: <code>https://sad.adsgram.ai/js/sad.min.js</code>.</li>
-        </ul>
       </section>
     </main>
   </div>
