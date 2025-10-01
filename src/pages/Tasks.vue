@@ -2,27 +2,29 @@
 import { ref, onMounted, onUnmounted } from 'vue'
 import BottomNav from '../components/BottomNav.vue'
 
+/** ENV: để đúng định dạng task-XXXXX */
 const raw = String(import.meta.env.VITE_ADSGRAM_BLOCK_ID ?? '').trim()
-const blockId = /^task-\d+$/i.test(raw) ? raw : (/^\d+$/.test(raw) ? `task-${raw}` : '')
+const blockId = /^task-\d+$/i.test(raw) ? raw : ( /^\d+$/.test(raw) ? `task-${raw}` : '' )
 const rewardUi = 10
 
 const prof = ref(null)
 const sdkReady = ref(false)
 const msg = ref('')
 const ag = ref(null)
-let granting = false                      // <— chặn post 2 lần
-let onReward = null                       // giữ ref để removeEventListener khi unmount
+
+// chặn double-fire
+let rewardFired = false
 
 async function loadProfile () {
   try {
     const r = await fetch('/api/profile', { credentials: 'include' })
     if (r.ok) prof.value = await r.json()
-  } catch {}
+  } catch (e) { console.error(e) }
 }
 
+/** nạp SDK của Adsgram (theo docs cho Task) */
 function loadSdkOnce () {
-  // SDK cho Task
-  const url = 'https://js.adsgram.ai/adsgram.min.js'
+  const url = 'https://sad.adsgram.ai/js/sad.min.js'
   if ([...document.scripts].some(s => s.src === url)) { sdkReady.value = true; return Promise.resolve() }
   return new Promise((resolve, reject) => {
     const s = document.createElement('script')
@@ -34,6 +36,7 @@ function loadSdkOnce () {
   })
 }
 
+/** toast nhỏ */
 function toast(t) {
   const el = document.createElement('div')
   el.className = 'toast'
@@ -43,12 +46,12 @@ function toast(t) {
   setTimeout(() => { el.classList.remove('show'); setTimeout(() => el.remove(), 250) }, 1600)
 }
 
+/** bind các event của <adsgram-task> */
 function bindEvents () {
   if (!ag.value) return
-
-  onReward = async () => {
-    if (granting) return
-    granting = true
+  ag.value.addEventListener('reward', async () => {
+    if (rewardFired) return
+    rewardFired = true
     try {
       const r = await fetch('/api/tasks/adsgram-reward', { method: 'POST', credentials: 'include' })
       if (!r.ok) throw new Error(await r.text())
@@ -58,19 +61,21 @@ function bindEvents () {
     } catch (e) {
       msg.value = 'Không cộng thưởng: ' + (e?.message || 'Lỗi máy chủ')
     }
-  }
+  }, { once: true })
 
-  // chỉ nhận 1 lần duy nhất
-  ag.value.addEventListener('reward', onReward, { once: true })
-  ag.value.addEventListener('onEnterNotFound', () => { msg.value = 'Không bắt đầu được nhiệm vụ, thử lại sau.' })
+  ag.value.addEventListener('onEnterNotFound', () => {
+    msg.value = 'Không bắt đầu được nhiệm vụ, thử lại sau.'
+  }, { once: true })
 }
 
 onMounted(async () => {
   await Promise.all([loadProfile(), loadSdkOnce()])
   bindEvents()
 })
+
 onUnmounted(() => {
-  if (ag.value && onReward) ag.value.removeEventListener('reward', onReward)
+  // reset cờ khi rời trang (để lần sau dùng lại bình thường)
+  rewardFired = false
 })
 </script>
 
