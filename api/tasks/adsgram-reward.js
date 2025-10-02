@@ -24,7 +24,7 @@ export default async (req, res) => {
     })
     if (error) {
       console.error('task_adsgram_claim error', error)
-      return res.status(500).send('Supabase error')
+      return res.status(500).send('Supabase: ' + (error.message || 'unknown'))
     }
 
     const row = Array.isArray(data) ? data[0] : data
