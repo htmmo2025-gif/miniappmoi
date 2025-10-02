@@ -2,8 +2,6 @@ import { createApp } from 'vue'
 import App from './App.vue'
 import router from './router'   // <-- dùng router tách riêng
 import './style.css'
-import 'vue3-luck-draw/dist/index.css'
-
 window.Telegram?.WebApp?.ready?.();
 window.Telegram?.WebApp?.expand?.();
 window.Telegram?.WebApp?.disableVerticalSwipes?.();
