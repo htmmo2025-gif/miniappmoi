@@ -117,7 +117,7 @@ function bindEvents() {
 
         if (!r.ok) {
           if (r.status === 429) {
-            let wait = 45
+            let wait = 300
             try {
               const json = await r.json()
               wait = Number(json?.wait ?? wait)
