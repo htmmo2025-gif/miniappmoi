@@ -7,6 +7,7 @@ import Account from './pages/Account.vue'
 import ErrorPage from './pages/Error.vue'
 import Swap from './pages/Swap.vue'
 import Withdraw from './pages/Withdraw.vue'
+import Wheel from './pages/Wheel.vue'
 
 export default createRouter({
   history: createWebHistory(),
