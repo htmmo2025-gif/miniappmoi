@@ -14,6 +14,7 @@ const ag = ref(null)
 
 // chặn double-fire
 let rewardFired = false
+let justCreditedAt = 0
 
 async function loadProfile () {
   try {
@@ -50,21 +51,16 @@ function toast(t) {
   function bindEvents () {
   if (!ag.value) return
 
-  // tiện ích đếm ngược
   let cdTimer = null
-  function startCooldown(sec) {
+  const startCooldown = (sec) => {
     clearInterval(cdTimer)
     let left = Math.max(0, Number(sec) || 0)
     if (!left) return
     msg.value = `Bạn vừa nhận rồi, đợi ${left}s nữa nhé.`
     cdTimer = setInterval(() => {
       left--
-      if (left <= 0) {
-        clearInterval(cdTimer)
-        msg.value = ''
-      } else {
-        msg.value = `Bạn vừa nhận rồi, đợi ${left}s nữa nhé.`
-      }
+      if (left <= 0) { clearInterval(cdTimer); msg.value = '' }
+      else msg.value = `Bạn vừa nhận rồi, đợi ${left}s nữa nhé.`
     }, 1000)
   }
 
@@ -75,33 +71,21 @@ function toast(t) {
       const r = await fetch('/api/tasks/adsgram-reward', { method: 'POST', credentials: 'include' })
 
       if (!r.ok) {
-        // xử lý riêng 429
+        // nếu vừa credit trong 2s thì bỏ qua 429 (tránh đè thông báo)
+        if (r.status === 429 && Date.now() - justCreditedAt < 2000) return
         if (r.status === 429) {
-          // cố đọc JSON; fallback text
-          let wait = 45
-          try {
-            const ct = r.headers.get('content-type') || ''
-            if (ct.includes('application/json')) {
-              const j = await r.json()
-              wait = Number(j?.wait ?? wait)
-            } else {
-              const t = await r.text()
-              const m = t.match(/"wait"\s*:\s*(\d+)/)
-              if (m) wait = Number(m[1])
-            }
-          } catch {}
-          startCooldown(wait)
+          const j = await r.json().catch(()=>null)
+          startCooldown(j?.wait ?? 45)
           return
         }
-        // các lỗi khác: hiện text
-        const txt = await r.text().catch(() => '')
+        const txt = await r.text().catch(()=> '')
         throw new Error(txt || 'Lỗi máy chủ')
       }
 
-      // OK
       await r.json().catch(()=>null)
       await loadProfile()
       msg.value = ''
+      justCreditedAt = Date.now()
       toast(`+${rewardUi} HTW`)
       try { window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('success') } catch {}
     } catch (e) {
