@@ -72,7 +72,11 @@ function bindEvents () {
 
   // Fired when user completed the task
   ag.value.addEventListener('reward', async () => {
-    if (inFlight) return
+    console.log('🎯 Event reward fired!', { inFlight, justCreditedAt })
+    if (inFlight) { 
+    console.warn('⚠️ Duplicate reward event blocked')
+    return 
+    }
     inFlight = true
     try {
       const r = await fetch('/api/tasks/adsgram-reward', { method: 'POST', credentials: 'include' })
@@ -82,18 +86,15 @@ function bindEvents () {
         if (r.status === 429 && Date.now() - justCreditedAt < 1500) return
 
         if (r.status === 429) {
-          let wait = 45
-          try {
-            const ct = r.headers.get('content-type') || ''
-            if (ct.includes('application/json')) {
-              const j = await r.json(); wait = Number(j?.wait ?? wait)
-            } else {
-              const t = await r.text(); const m = t.match(/"wait"\s*:\s*(\d+)/); if (m) wait = Number(m[1])
-            }
-          } catch {}
-          startCooldown(wait)
-          return
-        }
+  let wait = 45
+  try {
+    const text = await r.text()
+    const json = JSON.parse(text)
+    wait = Number(json?.wait ?? wait)
+  } catch {}
+  startCooldown(wait)
+  return
+}
         throw new Error(await r.text())
       }
 
