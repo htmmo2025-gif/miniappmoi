@@ -31,6 +31,7 @@ const initials = computed(() => {
 
 function goWithdraw() { router.push({ name: 'withdraw' }) }
 function goSwap()     { router.push({ name: 'swap' }) }
+function goWheel()    { router.push({ name: 'wheel' }) } // <— Nút vòng quay
 function openSupport() {
   const url = 'https://t.me/your_support_channel'
   if (window.Telegram?.WebApp?.openTelegramLink) {
@@ -98,6 +99,16 @@ onMounted(loadProfile)
             <div class="meta">
               <div class="title">Hỗ trợ</div>
               <div class="sub">CSKH Telegram</div>
+            </div>
+            <i class="bi bi-chevron-right chev"></i>
+          </button>
+
+          <!-- ⭐ Nút Vòng quay may mắn -->
+          <button class="item" @click="goWheel">
+            <span class="ic ic-wheel"><i class="bi bi-stars"></i></span>
+            <div class="meta">
+              <div class="title">Vòng quay may mắn</div>
+              <div class="sub">Quay để nhận thưởng</div>
             </div>
             <i class="bi bi-chevron-right chev"></i>
           </button>
@@ -174,6 +185,7 @@ onMounted(loadProfile)
 .ic-support{background:linear-gradient(145deg,#0ea5e9,#2563eb)}
 .ic-withdraw{background:linear-gradient(145deg,#059669,#10b981)}
 .ic-swap{background:linear-gradient(145deg,#7c3aed,#8b5cf6)}
+.ic-wheel{background:linear-gradient(145deg,#f97316,#ef4444)} /* nút vòng quay */
 .meta .title{font-weight:700;font-size:14px}
 .meta .sub{font-size:12px;color:var(--muted);margin-top:2px}
 .chev{color:var(--muted)}
