@@ -54,7 +54,16 @@ function bindEvents () {
     rewardFired = true
     try {
       const r = await fetch('/api/tasks/adsgram-reward', { method: 'POST', credentials: 'include' })
-      if (!r.ok) throw new Error(await r.text())
+      if (!r.ok) {
+        if (r.status === 429) {
+          const j = await r.json().catch(()=>null)
+          const wait = j?.wait ?? 45
+          msg.value = `Bạn vừa nhận rồi, đợi ${wait}s nữa nhé.`
+          return
+        }
+        throw new Error(await r.text())
+      }
+      const j = await r.json().catch(()=>null)
       await loadProfile()
       toast(`+${rewardUi} HTW`)
       try { window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('success') } catch {}
@@ -87,8 +96,6 @@ onUnmounted(() => {
     </header>
 
     <main class="wrap">
-
-      <!-- Adsgram Task (dùng slots: button / reward / claim / done) -->
       <section class="card">
         <div class="title"><i class="bi bi-badge-ad"></i> Xem quảng cáo</div>
         <p class="mut">Mỗi lần xem thưởng <b>{{ rewardUi }}</b> HTW.</p>
@@ -101,18 +108,9 @@ onUnmounted(() => {
           data-debug="false"
           data-debug-console="false"
         >
-          <!-- nút bắt đầu (button slot) -->
           <button slot="button" class="ag-go">go</button>
-
-          <!-- con tem thưởng (reward slot) -->
-          <div slot="reward" class="ag-reward">
-            <i class="bi bi-coin"></i><span>reward</span>
-          </div>
-
-          <!-- nút nhận thưởng (claim slot) -->
+          <div slot="reward" class="ag-reward"><i class="bi bi-coin"></i><span>reward</span></div>
           <button slot="claim" class="ag-claim">claim</button>
-
-          <!-- trạng thái xong (done slot) -->
           <div slot="done" class="ag-done"><i class="bi bi-check2-circle"></i> done</div>
         </adsgram-task>
 
@@ -152,72 +150,24 @@ onUnmounted(() => {
 .card{ background:#0f172a; border:var(--ring); border-radius:14px; padding:16px; box-shadow:0 10px 30px rgba(2,8,23,.35) }
 .title{display:flex; align-items:center; gap:8px; font-weight:800; margin-bottom:8px}
 .mut{color:var(--mut); font-size:13px; margin:0 0 12px}
-.hero{display:flex; gap:12px; align-items:center}
-.hero-ic{width:44px;height:44px;border-radius:12px;display:grid;place-items:center;background:linear-gradient(145deg,#22d3ee,#6366f1);color:#fff}
-.lbl{color:#9aa3b2; font-size:12px}
-.amt{font:800 22px/1.1 ui-sans-serif,system-ui}
-.amt span{font:700 12px; opacity:.85; margin-left:6px}
 
-/* ====== Custom UI cho <adsgram-task> theo docs (button/reward/claim/done) ====== */
-.ag{
-  /* các biến CSS mà Adsgram hỗ trợ */
-  --adsgram-task-font-size: 14px;
-  --adsgram-task-icon-size: 36px;
-  --adsgram-task-title-gap: 10px;
-  --adsgram-task-icon-border-radius: 12px;
-  --adsgram-task-button-width: 72px;
-}
-
-/* nút “go” ở slot button */
-.ag-go{
-  width:var(--adsgram-task-button-width);
-  height:36px;
-  border:none;
-  border-radius:10px;
-  font-weight:900;
-  text-transform:lowercase;
-  background:#2563eb;
-  color:#fff;
-  box-shadow: 0 6px 16px rgba(37,99,235,.35);
-}
-
-/* chip reward ở slot reward */
-.ag-reward{
-  margin-top:8px;
-  display:inline-flex; gap:6px; align-items:center;
-  padding:6px 10px; border-radius:999px;
-  background:#0e1525; border:1px solid #334155;
-  color:#cbd5e1; font-weight:800; font-size:12px;
-}
-
-/* nút claim (nhận thưởng) */
-.ag-claim{
-  margin-top:10px;
-  width:var(--adsgram-task-button-width);
-  height:36px;
-  border:none; border-radius:10px;
-  background:#f59e0b; color:#0b0f1a; font-weight:900;
-  box-shadow: 0 6px 16px rgba(245,158,11,.35);
-}
-
-/* trạng thái done */
-.ag-done{
-  margin-top:10px;
-  display:inline-flex; gap:6px; align-items:center;
-  padding:6px 12px; border-radius:999px;
-  background:#16a34a22; border:1px solid #16a34a66; color:#22c55e; font-weight:900;
-}
+/* ====== Custom UI cho <adsgram-task> ====== */
+.ag{ --adsgram-task-font-size:14px; --adsgram-task-icon-size:36px; --adsgram-task-title-gap:10px;
+     --adsgram-task-icon-border-radius:12px; --adsgram-task-button-width:72px }
+.ag-go{ width:var(--adsgram-task-button-width); height:36px; border:none; border-radius:10px;
+  font-weight:900; text-transform:lowercase; background:#2563eb; color:#fff; box-shadow:0 6px 16px rgba(37,99,235,.35) }
+.ag-reward{ margin-top:8px; display:inline-flex; gap:6px; align-items:center; padding:6px 10px; border-radius:999px;
+  background:#0e1525; border:1px solid #334155; color:#cbd5e1; font-weight:800; font-size:12px }
+.ag-claim{ margin-top:10px; width:var(--adsgram-task-button-width); height:36px; border:none; border-radius:10px;
+  background:#f59e0b; color:#0b0f1a; font-weight:900; box-shadow:0 6px 16px rgba(245,158,11,.35) }
+.ag-done{ margin-top:10px; display:inline-flex; gap:6px; align-items:center; padding:6px 12px; border-radius:999px;
+  background:#16a34a22; border:1px solid #16a34a66; color:#22c55e; font-weight:900 }
 
 /* notes & toast */
 .warn{margin-top:8px; color:#fbbf24; font-size:12px}
-.tip ul{margin:6px 0 0 18px; padding:0}
-.tip li{margin:6px 0; color:#9aa3b2; font-size:13px}
-:global(.toast){
-  position: fixed; top: calc(64px + env(safe-area-inset-top)); left: 50%;
-  transform: translateX(-50%) translateY(-10px);
-  background: linear-gradient(135deg,#22c55e,#10b981); color:#0b0f1a;
-  padding: 10px 14px; border-radius: 12px; font-weight: 800; font-size: 13px;
-  box-shadow: 0 10px 30px rgba(16,185,129,.35); opacity: 0; z-index: 1000; transition: transform .2s, opacity .2s
-}
-:global(.toast.show){ opacity:1; transform: translateX(-50%) translateY(0) }
+:global(.toast){ position:fixed; top:calc(64px + env(safe-area-inset-top)); left:50%;
+  transform:translateX(-50%) translateY(-10px); background:linear-gradient(135deg,#22c55e,#10b981); color:#0b0f1a;
+  padding:10px 14px; border-radius:12px; font-weight:800; font-size:13px; box-shadow:0 10px 30px rgba(16,185,129,.35);
+  opacity:0; z-index:1000; transition:transform .2s, opacity .2s }
+:global(.toast.show){ opacity:1; transform:translateX(-50%) translateY(0) }
 </style>
