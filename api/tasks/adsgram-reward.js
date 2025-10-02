@@ -2,7 +2,7 @@
 import { supa } from '../_supa.js'
 
 const REWARD = Number(process.env.ADSGRAM_REWARD_HTW || 0)
-const COOLDOWN_SEC = 45
+const COOLDOWN_SEC = 5
 
 function getUid(req) {
   const m = (req.headers.cookie || '').match(/(?:^|;\s*)tg_uid=(\d+)/)
