@@ -28,9 +28,8 @@ export default async function handler(req, res) {
         return res.status(500).send('User not found');
       }
 
-      // Lấy lần claim cuối từ adsgram_claims
       const { data: lastClaim } = await supa
-        .from('adsgram_claims')
+        .from('mining_claims')
         .select('claimed_at')
         .eq('user_id', user.id)
         .order('claimed_at', { ascending: false })
