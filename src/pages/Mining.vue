@@ -12,9 +12,15 @@ const state = ref({
 const busy = ref(false)
 const loading = ref(true)
 const msg = ref('')
+const claimInProgress = ref(false) // Ngăn double-click
 
 let timerId = null
-const canClaim = computed(() => !busy.value && state.value.remaining <= 0)
+const canClaim = computed(() => 
+  !busy.value && 
+  !claimInProgress.value && 
+  state.value.remaining <= 0 && 
+  !loading.value
+)
 
 /* ========= Reward Ad (Adsgram) ========= */
 const rewardBlockId = String(import.meta.env.VITE_ADSGRAM_REWARD_BLOCK_ID || '')
@@ -39,20 +45,29 @@ async function showRewardAd() {
   await loadRewardSdk()
   const ctrl = window.Adsgram?.init?.({ blockId: String(rewardBlockId) })
   if (!ctrl) throw new Error('Không khởi tạo được Adsgram Reward')
-  // Nếu người dùng không xem hết/đóng sớm, SDK có thể reject → coi là thất bại
   await ctrl.show()
 }
 
 /* ============ Mining logic ============ */
-function startTicker () {
+function startTicker() {
   stopTicker()
   timerId = setInterval(() => {
-    if (state.value.remaining > 0) state.value.remaining--
+    if (state.value.remaining > 0) {
+      state.value.remaining--
+    } else {
+      stopTicker()
+    }
   }, 1000)
 }
-function stopTicker () { if (timerId) { clearInterval(timerId); timerId = null } }
 
-async function loadStatus () {
+function stopTicker() {
+  if (timerId) {
+    clearInterval(timerId)
+    timerId = null
+  }
+}
+
+async function loadStatus() {
   loading.value = true
   msg.value = ''
   try {
@@ -65,7 +80,9 @@ async function loadStatus () {
       remaining: data.remaining,
       htw_balance: Number(data.htw_balance ?? 0),
     }
-    startTicker()
+    if (data.remaining > 0) {
+      startTicker()
+    }
   } catch (e) {
     console.error(e)
     msg.value = 'Không tải được trạng thái mining.'
@@ -74,40 +91,57 @@ async function loadStatus () {
   }
 }
 
-async function claim () {
-  if (!canClaim.value) return
+async function claim() {
+  if (!canClaim.value || claimInProgress.value) return
+  
+  claimInProgress.value = true
   busy.value = true
   msg.value = ''
+  
   try {
-    // 1) Bắt buộc xem Reward ad trước khi claim
+    // 1) Bắt buộc xem Reward ad trước
     await showRewardAd().catch((e) => {
       throw new Error(e?.message || 'Vui lòng xem quảng cáo để claim.')
     })
 
     // 2) Sau khi xem xong mới gọi API claim
-    const r = await fetch('/api/mine', { method: 'POST', credentials: 'include' })
+    const r = await fetch('/api/mine', { 
+      method: 'POST', 
+      credentials: 'include' 
+    })
+    
     const data = await r.json().catch(() => ({}))
+    
     if (!r.ok || data?.ok !== true) {
+      // Backend từ chối - set lại cooldown
       const remain = Number(data?.remaining ?? state.value.cooldown)
       state.value.remaining = remain
-      msg.value = 'Chưa hết thời gian chờ.'
+      startTicker()
+      msg.value = data?.ok === false 
+        ? 'Chưa hết thời gian chờ.' 
+        : 'Claim thất bại.'
       return
     }
+    
     // Claim thành công
-    state.value.htw_balance = Number(
-      data.htw_balance ?? state.value.htw_balance + state.value.reward
-    )
+    state.value.htw_balance = Number(data.htw_balance ?? state.value.htw_balance)
     state.value.remaining = state.value.cooldown
     msg.value = `Nhận +${state.value.reward} HTW thành công!`
+    startTicker()
+    
   } catch (e) {
     console.error(e)
     msg.value = e?.message || 'Claim thất bại, thử lại sau.'
   } finally {
     busy.value = false
+    // Delay 2s trước khi cho phép claim lại (tránh spam)
+    setTimeout(() => {
+      claimInProgress.value = false
+    }, 2000)
   }
 }
 
-function fmtTime (sec) {
+function fmtTime(sec) {
   const m = Math.floor(sec / 60).toString().padStart(2, '0')
   const s = Math.floor(sec % 60).toString().padStart(2, '0')
   return `${m}:${s}`
@@ -162,10 +196,10 @@ onUnmounted(stopTicker)
           </span>
         </button>
 
-        <p v-if="!rewardBlockId" class="note">
-          Thiếu <b>VITE_ADSGRAM_REWARD_BLOCK_ID</b> nên không thể hiển thị quảng cáo Reward.
+        <p v-if="!rewardBlockId" class="note warn">
+          ⚠️ Thiếu <b>VITE_ADSGRAM_REWARD_BLOCK_ID</b> nên không thể hiển thị quảng cáo Reward.
         </p>
-        <p v-if="msg" class="note">{{ msg }}</p>
+        <p v-if="msg" class="note" :class="{ success: msg.includes('thành công') }">{{ msg }}</p>
       </section>
 
       <section v-if="loading" class="card center">
@@ -228,10 +262,20 @@ onUnmounted(stopTicker)
   width:100%; padding:14px; border-radius:14px; border:none; color:#0b0f1a; font-weight:900;
   background:linear-gradient(145deg,#fde68a,#60a5fa);
   display:flex; align-items:center; justify-content:center; gap:8px;
+  transition: opacity 0.2s;
 }
-.btn:disabled{opacity:.5}
-.spin{animation:spin 1s linear infinite} @keyframes spin{to{transform:rotate(360deg)}}
+.btn:disabled{opacity:.5; cursor: not-allowed;}
+.btn:not(:disabled):active{opacity:.8}
 
-.note{margin-top:10px; padding:10px 12px; border-radius:10px; background:#0e1525; color:#cbd5e1}
+.spin{animation:spin 1s linear infinite} 
+@keyframes spin{to{transform:rotate(360deg)}}
+
+.note{
+  margin-top:10px; padding:10px 12px; border-radius:10px; 
+  background:#0e1525; color:#cbd5e1; font-size:13px;
+}
+.note.warn{background:#422006; color:#fed7aa; border:1px solid #92400e}
+.note.success{background:#064e3b; color:#a7f3d0; border:1px solid #065f46}
+
 @media (max-width:360px){ .row{grid-template-columns:1fr} }
 </style>

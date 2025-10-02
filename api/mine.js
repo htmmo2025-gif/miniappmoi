@@ -1,8 +1,8 @@
 // /api/mine.js
-import { supa } from './_supa.js';
+import { supa } from './_supa.js'
 
-const COOLDOWN = 1800; // 30 phút (giây)
-const REWARD = 20;     // 20 HTW mỗi lần
+const REWARD = 20; // HTW mỗi lần
+const COOLDOWN = 1800; // 30 phút = 1800 giây
 
 function getUidFromCookie(req) {
   const m = (req.headers.cookie || '').match(/(?:^|;\s*)tg_uid=(\d+)/);
@@ -14,70 +14,85 @@ export default async function handler(req, res) {
     const uid = getUidFromCookie(req);
     if (!uid) return res.status(401).send('Unauthorized');
 
+    const { data: u, error: e1 } = await supa
+      .from('users').select('htw_balance').eq('id', uid).single();
+    if (e1) return res.status(500).send('Supabase error');
+
+    // ===== GET: Lấy trạng thái =====
     if (req.method === 'GET') {
-      // lấy số dư
-      const { data: u, error: e1 } = await supa
-        .from('users').select('htw_balance').eq('id', uid).single();
-      if (e1) return res.status(500).send('Supabase error');
-
-      // lấy lần claim gần nhất
-      const { data: lastRows, error: e2 } = await supa
-        .from('mining')
-        .select('created_at')
+      const { data: lastRows } = await supa
+        .from('adsgram_claims')
+        .select('claimed_at')
         .eq('user_id', uid)
-        .order('created_at', { ascending: false })
-        .limit(1);
-      if (e2) return res.status(500).send('Supabase error');
+        .order('claimed_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
 
-      let remain = 0, lastAt = null;
-      if (lastRows && lastRows.length) {
-        lastAt = new Date(lastRows[0].created_at);
-        const diff = Math.floor((Date.now() - lastAt.getTime()) / 1000);
-        remain = Math.max(0, COOLDOWN - diff);
+      let remaining = 0;
+      if (lastRows?.claimed_at) {
+        const elapsed = (Date.now() - new Date(lastRows.claimed_at).getTime()) / 1000;
+        remaining = Math.max(0, Math.ceil(COOLDOWN - elapsed));
       }
 
       return res.status(200).json({
         reward: REWARD,
         cooldown: COOLDOWN,
-        remaining: remain,
-        last_claim_at: lastAt,
-        htw_balance: Number(u?.htw_balance ?? 0)
+        remaining,
+        htw_balance: Number(u.htw_balance ?? 0),
       });
     }
 
+    // ===== POST: Claim =====
     if (req.method === 'POST') {
-      // Gọi RPC atomic
-      const { data, error } = await supa.rpc('mining_claim', {
-        p_uid: uid,
-        p_reward: REWARD,
-        p_cooldown_secs: COOLDOWN
-      });
-      if (error) {
-        console.error('mining_claim error', error);
-        return res.status(500).send('Supabase error');
-      }
-      const row = Array.isArray(data) ? data[0] : null;
-      if (!row) return res.status(500).send('Unexpected');
+      // 1) Lấy lần claim gần nhất
+      const { data: lastClaim } = await supa
+        .from('adsgram_claims')
+        .select('claimed_at')
+        .eq('user_id', uid)
+        .order('claimed_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
 
-      if (row.ok !== true) {
-        return res.status(429).json({
-          ok: false,
-          remaining: row.remain ?? COOLDOWN
-        });
+      // 2) Kiểm tra cooldown
+      if (lastClaim?.claimed_at) {
+        const elapsed = (Date.now() - new Date(lastClaim.claimed_at).getTime()) / 1000;
+        const remain = COOLDOWN - elapsed;
+        if (remain > 0) {
+          return res.status(200).json({
+            ok: false,
+            remaining: Math.ceil(remain),
+            htw_balance: Number(u.htw_balance ?? 0),
+          });
+        }
       }
+
+      // 3) Cộng HTW + ghi log claim
+      const newBal = Number(u.htw_balance ?? 0) + REWARD;
+      
+      // Transaction: cập nhật balance + insert claim record
+      const { error: e2 } = await supa
+        .from('users')
+        .update({ htw_balance: newBal })
+        .eq('id', uid);
+      
+      if (e2) return res.status(500).send('Update balance failed');
+
+      await supa.from('adsgram_claims').insert({
+        user_id: uid,
+        reward: REWARD,
+        claimed_at: new Date().toISOString(),
+      });
 
       return res.status(200).json({
         ok: true,
-        reward: REWARD,
-        next_at: row.next_at,
+        htw_balance: newBal,
         remaining: COOLDOWN,
-        htw_balance: Number(row.new_htw)
       });
     }
 
     return res.status(405).send('Method not allowed');
   } catch (e) {
-    console.error('mine handler exception', e);
-    return res.status(500).send('Server error');
+    console.error(e);
+    res.status(500).send('Server error');
   }
 }
