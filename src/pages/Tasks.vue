@@ -2,7 +2,6 @@
 import { ref, onMounted, onUnmounted } from 'vue'
 import BottomNav from '../components/BottomNav.vue'
 
-/** ENV: để đúng định dạng task-XXXXX */
 const raw = String(import.meta.env.VITE_ADSGRAM_BLOCK_ID ?? '').trim()
 const blockId = /^task-\d+$/i.test(raw) ? raw : ( /^\d+$/.test(raw) ? `task-${raw}` : '' )
 const rewardUi = 10
@@ -12,9 +11,10 @@ const sdkReady = ref(false)
 const msg = ref('')
 const ag = ref(null)
 
-// chặn double-fire
-let rewardFired = false
-let justCreditedAt = 0
+/* ----- CHỈNH Ở ĐÂY ----- */
+let inFlight = false            // chống double-fire ngắn hạn
+let justCreditedAt = 0          // để không bị 429 đè thông báo ngay sau khi đã +HTW
+let cdTimer = null              // timer đếm ngược cooldown
 
 async function loadProfile () {
   try {
@@ -23,7 +23,6 @@ async function loadProfile () {
   } catch (e) { console.error(e) }
 }
 
-/** nạp SDK của Adsgram (theo docs cho Task) */
 function loadSdkOnce () {
   const url = 'https://sad.adsgram.ai/js/sad.min.js'
   if ([...document.scripts].some(s => s.src === url)) { sdkReady.value = true; return Promise.resolve() }
@@ -37,7 +36,6 @@ function loadSdkOnce () {
   })
 }
 
-/** toast nhỏ */
 function toast(t) {
   const el = document.createElement('div')
   el.className = 'toast'
@@ -47,57 +45,77 @@ function toast(t) {
   setTimeout(() => { el.classList.remove('show'); setTimeout(() => el.remove(), 250) }, 1600)
 }
 
-/** bind các event của <adsgram-task> */
-  function bindEvents () {
+/* ===== bind các event của <adsgram-task> ===== */
+function bindEvents () {
   if (!ag.value) return
 
-  let cdTimer = null
+  // helper: đếm ngược cooldown
   const startCooldown = (sec) => {
     clearInterval(cdTimer)
     let left = Math.max(0, Number(sec) || 0)
-    if (!left) return
+    if (!left) { msg.value = ''; return }
     msg.value = `Bạn vừa nhận rồi, đợi ${left}s nữa nhé.`
     cdTimer = setInterval(() => {
-      left--
+      left -= 1
       if (left <= 0) { clearInterval(cdTimer); msg.value = '' }
       else msg.value = `Bạn vừa nhận rồi, đợi ${left}s nữa nhé.`
     }, 1000)
   }
 
+  // KHÔNG dùng { once:true } để có thể claim nhiều lần
   ag.value.addEventListener('reward', async () => {
-    if (rewardFired) return
-    rewardFired = true
+    // chặn spam siêu nhanh
+    if (inFlight) return
+    inFlight = true
+
     try {
       const r = await fetch('/api/tasks/adsgram-reward', { method: 'POST', credentials: 'include' })
 
       if (!r.ok) {
-        // nếu vừa credit trong 2s thì bỏ qua 429 (tránh đè thông báo)
-        if (r.status === 429 && Date.now() - justCreditedAt < 2000) return
+        // nếu vừa cộng xong < 1.5s, bỏ qua 429 để không đè thông báo success
+        if (r.status === 429 && Date.now() - justCreditedAt < 1500) return
+
         if (r.status === 429) {
-          const j = await r.json().catch(()=>null)
-          startCooldown(j?.wait ?? 45)
+          // đọc JSON { ok:false, wait:n }
+          let wait = 45
+          try {
+            const ct = r.headers.get('content-type') || ''
+            if (ct.includes('application/json')) {
+              const j = await r.json()
+              wait = Number(j?.wait ?? wait)
+            } else {
+              const t = await r.text()
+              const m = t.match(/"wait"\s*:\s*(\d+)/)
+              if (m) wait = Number(m[1])
+            }
+          } catch {}
+          startCooldown(wait)
           return
         }
-        const txt = await r.text().catch(()=> '')
+        const txt = await r.text().catch(()=>'')
         throw new Error(txt || 'Lỗi máy chủ')
       }
 
+      // OK
       await r.json().catch(()=>null)
-      await loadProfile()
+      clearInterval(cdTimer)
       msg.value = ''
       justCreditedAt = Date.now()
+      await loadProfile()
       toast(`+${rewardUi} HTW`)
       try { window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('success') } catch {}
     } catch (e) {
       msg.value = 'Không cộng thưởng: ' + (e?.message || 'Lỗi máy chủ')
+    } finally {
+      // mở khoá sau 800ms để tránh double-fire do SDK bắn 2 lần
+      setTimeout(() => { inFlight = false }, 800)
     }
-  }, { once: true })
+  })
 
   ag.value.addEventListener('onEnterNotFound', () => {
     msg.value = 'Không bắt đầu được nhiệm vụ, thử lại sau.'
-  }, { once: true })
+  })
 }
-
 
 onMounted(async () => {
   await Promise.all([loadProfile(), loadSdkOnce()])
@@ -105,8 +123,7 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
-  // reset cờ khi rời trang (để lần sau dùng lại bình thường)
-  rewardFired = false
+  clearInterval(cdTimer)
 })
 </script>
 
