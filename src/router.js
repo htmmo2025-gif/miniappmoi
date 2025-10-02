@@ -18,6 +18,7 @@ export default createRouter({
     { path: '/account', component: Account },
     { path: '/swap', name: 'swap', component: Swap },
     { path: '/withdraw', name: 'withdraw', component: Withdraw },
+    { path: '/wheel', name: 'wheel', component: Wheel },
     { path: '/error', component: ErrorPage },
   ],
 })
