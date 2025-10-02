@@ -78,85 +78,78 @@ function startCooldown(sec) {
 function bindEvents() {
   if (!ag.value) return
 
+  // Debounce wrapper
+  let rewardTimeout = null
+  
   ag.value.addEventListener('reward', async () => {
     const now = Date.now()
     
-    // CHẶN 1: Đang xử lý reward khác
+    // Clear timeout cũ nếu có
+    if (rewardTimeout) {
+      clearTimeout(rewardTimeout)
+    }
+    
+    // Chặn nếu đang xử lý
     if (processingReward) {
-      console.warn('⚠️ Already processing reward, ignoring duplicate event')
+      console.warn('Already processing, blocked')
       return
     }
     
-    // CHẶN 2: Quá gần với lần claim trước (< 2s)
+    // Chặn nếu quá gần lần trước
     if (now - lastRewardTime < MIN_INTERVAL_MS) {
-      console.warn('⚠️ Too soon since last reward:', now - lastRewardTime, 'ms')
+      console.warn('Too soon:', now - lastRewardTime, 'ms')
       return
     }
     
-    processingReward = true
-    lastRewardTime = now
-    
-    console.log('🎯 Processing reward at', new Date().toISOString())
-    
-    try {
-      const r = await fetch('/api/tasks/adsgram-reward', { 
-        method: 'POST', 
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' }
-      })
+    // Debounce 500ms - chỉ xử lý lần cuối cùng
+    rewardTimeout = setTimeout(async () => {
+      processingReward = true
+      lastRewardTime = now
+      
+      console.log('Processing reward...')
+      
+      try {
+        const r = await fetch('/api/tasks/adsgram-reward', { 
+          method: 'POST', 
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' }
+        })
 
-      console.log('📡 API response status:', r.status)
-
-      if (!r.ok) {
-        if (r.status === 429) {
-          let wait = 45
-          try {
-            const ct = r.headers.get('content-type') || ''
-            if (ct.includes('application/json')) {
-              const j = await r.json()
-              wait = Number(j?.wait ?? wait)
-            } else {
-              const t = await r.text()
-              const m = t.match(/"wait"\s*:\s*(\d+)/)
-              if (m) wait = Number(m[1])
-            }
-          } catch {}
-          startCooldown(wait)
-          return
+        if (!r.ok) {
+          if (r.status === 429) {
+            let wait = 45
+            try {
+              const json = await r.json()
+              wait = Number(json?.wait ?? wait)
+            } catch {}
+            startCooldown(wait)
+            return
+          }
+          throw new Error(await r.text())
         }
-        
-        const errText = await r.text()
-        console.error('❌ API error:', errText)
-        throw new Error(errText)
-      }
 
-      const result = await r.json()
-      console.log('✅ Reward success:', result)
-      
-      clearInterval(cdTimer)
-      msg.value = ''
-      
-      await loadProfile()
-      toast(`+${rewardUi} HTW`)
-      
-      try { 
-        window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('success') 
-      } catch {}
-      
-      // Reset component sau 1.5s
-      setTimeout(() => {
-        taskKey.value++
-      }, 1500)
-      
-    } catch (e) {
-      console.error('💥 Reward error:', e)
-      msg.value = 'Lỗi: ' + (e?.message || 'Không xử lý được')
-    } finally {
-      // Delay để chắc chắn không có request nào khác leak qua
-      setTimeout(() => {
-        processingReward = false
-      }, 1000)
-    }
+        const result = await r.json()
+        console.log('Success:', result)
+        
+        clearInterval(cdTimer)
+        msg.value = ''
+        
+        await loadProfile()
+        toast(`+${rewardUi} HTW`)
+        
+        try { 
+          window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('success') 
+        } catch {}
+        
+        setTimeout(() => { taskKey.value++ }, 1500)
+        
+      } catch (e) {
+        console.error('Error:', e)
+        msg.value = 'Lỗi: ' + (e?.message || 'Không xử lý được')
+      } finally {
+        setTimeout(() => { processingReward = false }, 1500)
+      }
+    }, 500) // Debounce 500ms
   })
 
   ag.value.addEventListener('onError', (ev) => {
