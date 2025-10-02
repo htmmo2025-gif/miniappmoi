@@ -47,24 +47,61 @@ function toast(t) {
 }
 
 /** bind các event của <adsgram-task> */
-function bindEvents () {
+  function bindEvents () {
   if (!ag.value) return
+
+  // tiện ích đếm ngược
+  let cdTimer = null
+  function startCooldown(sec) {
+    clearInterval(cdTimer)
+    let left = Math.max(0, Number(sec) || 0)
+    if (!left) return
+    msg.value = `Bạn vừa nhận rồi, đợi ${left}s nữa nhé.`
+    cdTimer = setInterval(() => {
+      left--
+      if (left <= 0) {
+        clearInterval(cdTimer)
+        msg.value = ''
+      } else {
+        msg.value = `Bạn vừa nhận rồi, đợi ${left}s nữa nhé.`
+      }
+    }, 1000)
+  }
+
   ag.value.addEventListener('reward', async () => {
     if (rewardFired) return
     rewardFired = true
     try {
       const r = await fetch('/api/tasks/adsgram-reward', { method: 'POST', credentials: 'include' })
+
       if (!r.ok) {
+        // xử lý riêng 429
         if (r.status === 429) {
-          const j = await r.json().catch(()=>null)
-          const wait = j?.wait ?? 45
-          msg.value = `Bạn vừa nhận rồi, đợi ${wait}s nữa nhé.`
+          // cố đọc JSON; fallback text
+          let wait = 45
+          try {
+            const ct = r.headers.get('content-type') || ''
+            if (ct.includes('application/json')) {
+              const j = await r.json()
+              wait = Number(j?.wait ?? wait)
+            } else {
+              const t = await r.text()
+              const m = t.match(/"wait"\s*:\s*(\d+)/)
+              if (m) wait = Number(m[1])
+            }
+          } catch {}
+          startCooldown(wait)
           return
         }
-        throw new Error(await r.text())
+        // các lỗi khác: hiện text
+        const txt = await r.text().catch(() => '')
+        throw new Error(txt || 'Lỗi máy chủ')
       }
-      const j = await r.json().catch(()=>null)
+
+      // OK
+      await r.json().catch(()=>null)
       await loadProfile()
+      msg.value = ''
       toast(`+${rewardUi} HTW`)
       try { window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('success') } catch {}
     } catch (e) {
@@ -76,6 +113,7 @@ function bindEvents () {
     msg.value = 'Không bắt đầu được nhiệm vụ, thử lại sau.'
   }, { once: true })
 }
+
 
 onMounted(async () => {
   await Promise.all([loadProfile(), loadSdkOnce()])
