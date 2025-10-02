@@ -1,4 +1,4 @@
-<script setup>
+<!-- <script setup>
 import { ref } from 'vue'
 import { LuckyWheel } from '@lucky-canvas/vue'
 
@@ -119,4 +119,4 @@ function onEnd (prize) {
   box-shadow: 0 10px 30px rgba(16,185,129,.35); opacity: 0; z-index: 1000; transition: transform .2s, opacity .2s
 }
 :global(.toast.show){ opacity:1; transform: translateX(-50%) translateY(0) }
-</style>
+</style> -->
