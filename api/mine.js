@@ -11,32 +11,26 @@ function getUidFromCookie(req) {
 
 export default async function handler(req, res) {
   try {
-    const tgUid = getUidFromCookie(req);
-    if (!tgUid) return res.status(401).send('Unauthorized');
+    const uid = getUidFromCookie(req);
+    if (!uid) return res.status(401).send('Unauthorized');
+
+    const { data: u, error: e1 } = await supa
+      .from('users').select('htw_balance').eq('id', uid).single();
+    if (e1) return res.status(500).send('Supabase error');
 
     // ===== GET: Lấy trạng thái =====
     if (req.method === 'GET') {
-      // Lấy user info
-      const { data: user, error: e1 } = await supa
-        .from('users')
-        .select('id, htw_balance')
-        .eq('telegram_id', tgUid)
-        .single();
-      
-      if (e1 || !user) return res.status(500).send('User not found');
-
-      // Lấy lần claim cuối
-      const { data: lastClaim } = await supa
+      const { data: lastRows } = await supa
         .from('adsgram_claims')
         .select('claimed_at')
-        .eq('user_id', user.id)
+        .eq('user_id', uid)
         .order('claimed_at', { ascending: false })
         .limit(1)
         .maybeSingle();
 
       let remaining = 0;
-      if (lastClaim?.claimed_at) {
-        const elapsed = (Date.now() - new Date(lastClaim.claimed_at).getTime()) / 1000;
+      if (lastRows?.claimed_at) {
+        const elapsed = (Date.now() - new Date(lastRows.claimed_at).getTime()) / 1000;
         remaining = Math.max(0, Math.ceil(COOLDOWN - elapsed));
       }
 
@@ -44,47 +38,61 @@ export default async function handler(req, res) {
         reward: REWARD,
         cooldown: COOLDOWN,
         remaining,
-        htw_balance: Number(user.htw_balance ?? 0),
+        htw_balance: Number(u.htw_balance ?? 0),
       });
     }
 
     // ===== POST: Claim =====
     if (req.method === 'POST') {
-      // Gọi stored procedure để claim + tự động cộng hoa hồng
-      const { data, error } = await supa.rpc('claim_mining_reward', {
-        p_uid: tgUid,
-        p_reward: REWARD,
-        p_cooldown_secs: COOLDOWN
+      // 1) Lấy lần claim gần nhất
+      const { data: lastClaim } = await supa
+        .from('adsgram_claims')
+        .select('claimed_at')
+        .eq('user_id', uid)
+        .order('claimed_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      // 2) Kiểm tra cooldown
+      if (lastClaim?.claimed_at) {
+        const elapsed = (Date.now() - new Date(lastClaim.claimed_at).getTime()) / 1000;
+        const remain = COOLDOWN - elapsed;
+        if (remain > 0) {
+          return res.status(200).json({
+            ok: false,
+            remaining: Math.ceil(remain),
+            htw_balance: Number(u.htw_balance ?? 0),
+          });
+        }
+      }
+
+      // 3) Cộng HTW + ghi log claim
+      const newBal = Number(u.htw_balance ?? 0) + REWARD;
+      
+      // Transaction: cập nhật balance + insert claim record
+      const { error: e2 } = await supa
+        .from('users')
+        .update({ htw_balance: newBal })
+        .eq('id', uid);
+      
+      if (e2) return res.status(500).send('Update balance failed');
+
+      await supa.from('adsgram_claims').insert({
+        user_id: uid,
+        reward: REWARD,
+        claimed_at: new Date().toISOString(),
       });
-
-      if (error) {
-        console.error('RPC error:', error);
-        return res.status(500).send('Claim failed');
-      }
-
-      const result = data?.[0];
-      if (!result) {
-        return res.status(500).send('No result from procedure');
-      }
-
-      // result có dạng: { success, remaining, new_balance }
-      if (!result.success) {
-        return res.status(200).json({
-          ok: false,
-          remaining: result.remaining || 0,
-        });
-      }
 
       return res.status(200).json({
         ok: true,
-        htw_balance: Number(result.new_balance ?? 0),
+        htw_balance: newBal,
         remaining: COOLDOWN,
       });
     }
 
     return res.status(405).send('Method not allowed');
   } catch (e) {
-    console.error('mine.js error:', e);
+    console.error(e);
     res.status(500).send('Server error');
   }
 }
