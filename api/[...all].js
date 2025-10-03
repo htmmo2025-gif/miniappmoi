@@ -53,14 +53,18 @@ const routes = {
 
 // ===== utils =====
 function setCors(req, res) {
-    const origin = req.headers.origin || '*'
-    res.setHeader('Access-Control-Allow-Origin', origin)
-    res.setHeader('Vary', 'Origin')
-    res.setHeader('Access-Control-Allow-Credentials', 'true') // <<< thêm
-    res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS,HEAD')
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Telegram-Id')
-  }  
-  
+  // với credentials:true, không được dùng '*'
+  const origin =
+    req.headers.origin ||
+    (req.headers.host ? `https://${req.headers.host}` : '*')
+
+  res.setHeader('Access-Control-Allow-Origin', origin)
+  res.setHeader('Vary', 'Origin')
+  res.setHeader('Access-Control-Allow-Credentials', 'true')
+  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS,HEAD')
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Telegram-Id')
+}
+
 function sendJSON(res, code, data) {
   res.statusCode = code
   res.setHeader('content-type', 'application/json; charset=utf-8')
@@ -75,14 +79,19 @@ function normalizePathname(url) {
 // ===== main handler =====
 export default async function handler(req, res) {
   try {
-    setCors(res)
+    setCors(req, res) // <<< quan trọng
+
+    // preflight
     if (req.method === 'OPTIONS' || req.method === 'HEAD') {
+      // vẫn giữ CORS header ở đây
       res.statusCode = 204
       return res.end()
     }
+
     const key = `${req.method.toUpperCase()} ${normalizePathname(req.url)}`
     const fn = routes[key]
     if (!fn) return sendJSON(res, 404, { error: 'not_found', route: key })
+
     return await fn(req, res)
   } catch (e) {
     console.error('router error:', e)
@@ -90,5 +99,5 @@ export default async function handler(req, res) {
   }
 }
 
-// Node serverless runtime (đừng dùng "nodejs20.x")
+// Node serverless runtime
 export const config = { runtime: 'nodejs' }
