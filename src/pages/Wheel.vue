@@ -118,8 +118,11 @@ async function spin () {
       return
     }
 
-    const idx = Number(server.data.index ?? 0) % prizes.length
-    wheelRef.value?.stop?.(idx) // dừng đúng ô server trả
+    // an toàn & không làm lệch
+const idxRaw = Number(server.data.index)
+const idx = (Number.isFinite(idxRaw) && idxRaw >= 0 && idxRaw < prizes.length) ? idxRaw : 0
+wheelRef.value?.stop?.(idx)
+
 
     // cập nhật số dư + cooldown (nếu có)
     state.value.htw_balance = Number(server.data.htw_balance ?? state.value.htw_balance)
