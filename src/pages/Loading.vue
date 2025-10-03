@@ -4,9 +4,11 @@ import { useRouter } from 'vue-router'
 
 const router = useRouter()
 const tg = window.Telegram?.WebApp
+
 const loadingText = ref('Đang khởi tạo...')
 const progress = ref(0)
 
+// các bước hiển thị progress
 const loadingSteps = [
   { text: 'Đang khởi tạo...', duration: 800 },
   { text: 'Kết nối Telegram...', duration: 1000 },
@@ -16,38 +18,79 @@ const loadingSteps = [
 
 async function simulateLoading() {
   let currentProgress = 0
-  
   for (let i = 0; i < loadingSteps.length; i++) {
     const step = loadingSteps[i]
     loadingText.value = step.text
-    
-    const targetProgress = ((i + 1) / loadingSteps.length) * 100
-    const stepDuration = step.duration
-    const progressStep = (targetProgress - currentProgress) / (stepDuration / 50)
-    
-    while (currentProgress < targetProgress) {
-      await new Promise(resolve => setTimeout(resolve, 50))
-      currentProgress = Math.min(currentProgress + progressStep, targetProgress)
+    const target = ((i + 1) / loadingSteps.length) * 100
+    const stepDur = step.duration
+    const delta = (target - currentProgress) / (stepDur / 50)
+    while (currentProgress < target) {
+      await new Promise(r => setTimeout(r, 50))
+      currentProgress = Math.min(currentProgress + delta, target)
       progress.value = currentProgress
     }
   }
 }
 
+async function verifyTelegram() {
+  // initData dùng cho /api/tg/verify
+  const qs = new URLSearchParams(tg?.initData || '')
+  try {
+    const ok = await fetch('/api/tg/verify?' + qs.toString()).then(r => r.ok)
+    return ok
+  } catch {
+    return false
+  }
+}
+
+async function checkIsAdmin(tid) {
+  try {
+    const r = await fetch('/api/admin/whoami?tid=' + encodeURIComponent(tid))
+    if (!r.ok) return false
+    const j = await r.json()
+    return !!j.is_admin
+  } catch {
+    return false
+  }
+}
+
 onMounted(async () => {
   tg?.ready()
-  
-  // Start loading animation
+
+  // chạy progress song song với verify
   simulateLoading()
-  
-  const qs = new URLSearchParams(tg?.initData || '')
-  const ok = await fetch('/api/tg/verify?' + qs.toString()).then(r => r.ok).catch(() => false)
-  
-  // Ensure minimum loading time for smooth UX
-  await new Promise(resolve => setTimeout(resolve, 3500))
-  
-  router.replace(ok ? '/mining' : '/error')
+
+  const MIN_LOAD_MS = 3500
+  const t0 = Date.now()
+
+  // 1) verify telegram signature
+  const ok = await verifyTelegram()
+
+  // 2) nếu ok -> hỏi server xem có phải admin không
+  let isAdmin = false
+  if (ok) {
+    const tid =
+      tg?.initDataUnsafe?.user?.id ||
+      new URLSearchParams(tg?.initData || '').get('user') ||
+      ''
+    isAdmin = await checkIsAdmin(String(tid))
+  }
+
+  // đảm bảo tối thiểu MIN_LOAD_MS cho mượt
+  const elapsed = Date.now() - t0
+  if (elapsed < MIN_LOAD_MS) {
+    await new Promise(r => setTimeout(r, MIN_LOAD_MS - elapsed))
+  }
+
+  // đẩy progress về 100% để mượt
+  progress.value = 100
+  loadingText.value = 'Hoàn tất...'
+
+  // điều hướng
+  router.replace(ok ? (isAdmin ? '/admin' : '/mining') : '/error')
 })
 </script>
+
 
 <template>
   <div class="loading-container">
