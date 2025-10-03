@@ -55,7 +55,7 @@ const routes = {
   'POST /api/wheel/spin' : wheelSpin,
 
   // admin
-  'GET /api/admin/whoami'            : adminWhoami,
+  'GET /api/admin/whoami': adminWhoami,
   'GET /api/admin/withdraws'         : adminWithdraws,
   'POST /api/admin/withdraw_action'  : adminWithdrawAction,
 }
