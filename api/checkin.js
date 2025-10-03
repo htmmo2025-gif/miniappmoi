@@ -1,86 +1,133 @@
-// /api/checkin.js
-import { supa } from './_supa.js';
+// api/checkin.js
+import { createClient } from '@supabase/supabase-js'
 
-function getUid(req) {
-  const m = (req.headers.cookie || '').match(/(?:^|;\s*)tg_uid=(\d+)/);
-  return m ? Number(m[1]) : null;
+const supa = createClient(process.env.SUPABASE_URL, process.env.SERVICE_ROLE_KEY, {
+  auth: { persistSession: false }
+})
+
+const REWARDS = [1,2,3,4,5,6,7]
+
+function startOfTodayUTC(d = new Date()) {
+  const x = new Date(d)
+  x.setUTCHours(0,0,0,0)
+  return x
+}
+function secsToTomorrowUTC() {
+  const now = new Date()
+  const tmr = startOfTodayUTC(new Date(now.getTime() + 86400000))
+  return Math.max(0, Math.floor((tmr - now) / 1000))
 }
 
-function secondsToTomorrowVN() {
-  // chỉ dùng khi GET tính còn lại sơ bộ
-  const now = new Date();
-  const tzOffset = 7 * 60; // Asia/Ho_Chi_Minh UTC+7
-  const local = new Date(now.getTime() + (tzOffset - now.getTimezoneOffset()) * 60000);
-  const startNext = new Date(local);
-  startNext.setHours(24, 0, 0, 0);
-  return Math.max(0, Math.ceil((startNext - local) / 1000));
+// Lấy Telegram user id theo hệ thống của bạn
+function getUserId(req) {
+  // TODO: đổi cho đúng nguồn bạn đang lưu (cookie, header, query,…)
+  return (
+    req.headers['x-telegram-id'] ||
+    req.cookies?.tg_id ||
+    req.query?.user_id ||
+    req.body?.user_id ||
+    null
+  )
 }
 
 export default async function handler(req, res) {
   try {
-    const tgUid = getUid(req);
-    if (!tgUid) return res.status(401).send('Unauthorized');
+    const userId = getUserId(req)
+    if (!userId) {
+      res.status(401).json({ ok:false, message:'Missing user' })
+      return
+    }
 
-    // ===== GET: trạng thái điểm danh hôm nay =====
     if (req.method === 'GET') {
-      const { data: user, error: e1 } = await supa
-        .from('users')
-        .select('id, htw_balance')
-        .eq('telegram_id', tgUid)
-        .single();
-      if (e1 || !user) return res.status(500).json({ ok: false, error: 'User not found' });
+      // lấy users & checkins
+      const [{ data: u }, { data: c }] = await Promise.all([
+        supa.from('users').select('id, htw_balance, telegram_id').eq('id', userId).single(),
+        supa.from('daily_checkins').select('*').eq('user_id', userId).maybeSingle()
+      ])
 
-      // Hôm nay đã claim chưa?
-      const { data: today, error: e2 } = await supa
-        .from('checkin_claims')
-        .select('id, day_index, claimed_at')
-        .eq('user_id', user.id)
-        .gte('claimed_at', new Date(new Date().setHours(0,0,0,0)).toISOString())
-        .limit(1);
-      const claimed = (today?.length ?? 0) > 0;
+      let dayIndex = 1
+      let checkedToday = false
 
-      // Lấy progress (nếu cần hiển thị đang ở ngày nào)
-      const { data: prog } = await supa
-        .from('checkin_progress')
-        .select('day_index, last_checkin')
-        .eq('user_id', user.id)
-        .maybeSingle();
+      if (c) {
+        // c.streak_day là "ngày sẽ claim kế" (1..7)
+        dayIndex = Number(c.streak_day || 1)
+        if (c.last_checkin) {
+          const last = new Date(c.last_checkin)
+          const lastUTC0 = startOfTodayUTC(last).getTime()
+          const todayUTC0  = startOfTodayUTC().getTime()
+          const diffDays = Math.floor((todayUTC0 - lastUTC0)/86400000)
+          if (diffDays <= 0) checkedToday = true
+          else if (diffDays >= 2) dayIndex = 1 // bỏ lỡ >=1 ngày
+        }
+      }
 
-      return res.status(200).json({
+      res.json({
         ok: true,
-        claimed_today: claimed,
-        day_index: Number(prog?.day_index ?? 0),
-        remaining: claimed ? secondsToTomorrowVN() : 0,
-        htw_balance: Number(user.htw_balance ?? 0),
-      });
+        day_index: dayIndex,
+        checked_today: checkedToday,
+        remaining: checkedToday ? secsToTomorrowUTC() : 0,
+        htw_balance: Number(u?.htw_balance || 0),
+        telegram_id: u?.telegram_id || String(userId)
+      })
+      return
     }
 
-    // ===== POST: xem quảng cáo (ở client) xong thì claim =====
     if (req.method === 'POST') {
-      const { data, error } = await supa.rpc('daily_checkin_claim', { p_uid: tgUid });
-      if (error) {
-        console.error('RPC daily_checkin_claim error:', error);
-        return res.status(500).json({ ok: false, error: 'Supabase error', details: error.message });
+      // đọc hàng checkins hiện tại
+      const { data: row } = await supa.from('daily_checkins').select('*').eq('user_id', userId).maybeSingle()
+
+      // tính day claim hiện tại
+      let dayIndex = Number(row?.streak_day || 1)
+      let checkedToday = false
+      if (row?.last_checkin) {
+        const last = new Date(row.last_checkin)
+        const lastUTC0 = startOfTodayUTC(last).getTime()
+        const todayUTC0 = startOfTodayUTC().getTime()
+        const diffDays = Math.floor((todayUTC0 - lastUTC0)/86400000)
+        if (diffDays <= 0) checkedToday = true
+        else if (diffDays >= 2) dayIndex = 1
       }
-      const row = Array.isArray(data) ? data[0] : data;
-      if (!row?.ok) {
-        return res.status(200).json({
+
+      if (checkedToday) {
+        res.status(200).json({
           ok: false,
-          remaining: Number(row?.remaining ?? secondsToTomorrowVN()),
-        });
+          message: 'Đã điểm danh hôm nay',
+          day_index: dayIndex,
+          remaining: secsToTomorrowUTC()
+        })
+        return
       }
-      return res.status(200).json({
+
+      const add = REWARDS[Math.max(0, dayIndex - 1)] || 1
+      const now = new Date().toISOString()
+      const nextDay = dayIndex === 7 ? 1 : dayIndex + 1
+
+      // 1) cập nhật / upsert daily_checkins
+      await supa.from('daily_checkins').upsert({
+        user_id: userId,
+        streak_day: nextDay,     // lần tới sẽ claim ngày kế
+        last_checkin: now,
+        updated_at: now
+      }, { onConflict: 'user_id' })
+
+      // 2) cộng số dư (đơn giản, đủ dùng; nếu muốn an toàn tuyệt đối dùng RPC)
+      const { data: u0 } = await supa.from('users').select('htw_balance').eq('id', userId).single()
+      const newBal = Number(u0?.htw_balance || 0) + add
+      await supa.from('users').update({ htw_balance: newBal }).eq('id', userId)
+
+      res.json({
         ok: true,
-        add: Number(row.add ?? 0),
-        day: Number(row.day ?? 1),
-        remaining: Number(row.remaining ?? secondsToTomorrowVN()),
-        htw_balance: Number(row.new_balance ?? 0),
-      });
+        add,
+        day_index: nextDay,
+        remaining: secsToTomorrowUTC(),
+        htw_balance: newBal
+      })
+      return
     }
 
-    return res.status(405).send('Method not allowed');
+    res.status(405).json({ ok:false, message:'Method not allowed' })
   } catch (e) {
-    console.error('checkin api error:', e);
-    res.status(500).json({ ok: false, error: 'Server error' });
+    console.error(e)
+    res.status(500).json({ ok:false, message:'Server error' })
   }
 }

@@ -1,43 +1,29 @@
+<!-- src/pages/Checkin.vue -->
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import BottomNav from '../components/BottomNav.vue'
 
 /* ----- STATE ----- */
 const profile = ref({ telegram_id: '' })
-const state = ref({ day: 1, last: 0, balance: 0 }) // day: 1..7, last: ms epoch (0 nếu chưa)
-const msg = ref('')
-const busy = ref(false)
-const ready = ref(false) // Monetag sẵn sàng
-const fnRef = ref(null)  // window['show_xxx']
+
+// server trả về: day_index (1..7 là ngày cần claim kế tiếp), remaining (giây còn lại nếu đã claim hôm nay),
+// htw_balance (số dư thật), checked_today (bool)
+const state = ref({ day_index: 1, remaining: 0, htw_balance: 0, checked_today: false })
+
+const msg   = ref('')
+const busy  = ref(false)
+const ready = ref(false)  // Monetag sẵn sàng
+const fnRef = ref(null)   // window['show_xxx']
 
 const rewards = [1,2,3,4,5,6,7]
-const todayStart = () => { const d=new Date(); d.setHours(0,0,0,0); return d.getTime() }
 
 /* ----- UI derived ----- */
-const checkedToday = computed(() => {
-  if (!state.value.last) return false
-  return state.value.last >= todayStart()
-})
-const nextReward = computed(() => rewards[state.value.day-1])
+const day = computed(() => state.value.day_index) // ngày sẽ claim kế tiếp
+const checkedToday = computed(() => state.value.checked_today)
+const nextReward   = computed(() => rewards[Math.max(0, day.value - 1)])
 
-/* ----- Helpers ----- */
-const save = () => localStorage.setItem('checkin_v1', JSON.stringify(state.value))
-const load = () => {
-  try {
-    const raw = localStorage.getItem('checkin_v1')
-    if (raw) state.value = JSON.parse(raw)
-  } catch {}
-  // tính lại tiến trình theo ngày
-  if (state.value.last) {
-    const lastDay = new Date(state.value.last); lastDay.setHours(0,0,0,0)
-    const diff = Math.floor((todayStart() - lastDay.getTime())/86400000) // số ngày cách nhau
-    if (diff >= 2) state.value.day = 1               // bỏ lỡ ≥1 ngày => về ngày 1
-    else if (diff === 1) state.value.day = Math.min(state.value.day+1, 7) // sang ngày kế
-  }
-}
-
-/* Lấy đúng tên hàm từ thẻ SDK trong index.html (tránh lệch zone id) */
-function detectMonetagFnName() {
+/* ----- Monetag helpers ----- */
+function detectMonetagFnName () {
   const s = [...document.scripts].find(x => /liblt\.com\/sdk\.js|lib11\.com\/sdk\.js/.test(x.src))
   const zone = s?.getAttribute('data-zone')
   const name = s?.getAttribute('data-sdk')
@@ -46,17 +32,14 @@ function detectMonetagFnName() {
   const z = import.meta.env.VITE_MONETAG_ZONE_ID
   return z ? `show_${z}` : null
 }
-
-/* Chờ SDK sẵn sàng (rất gọn) */
-async function waitSdk(ms=5000) {
+async function waitSdk (ms = 5000) {
   const name = detectMonetagFnName()
   const t0 = Date.now()
-  while (Date.now()-t0 < ms) {
+  while (Date.now() - t0 < ms) {
     const f = name && window[name]
     if (typeof f === 'function') {
       fnRef.value = f
-      // preload nhanh (không quan trọng, có cũng tốt)
-      try { await f({ type:'preload', ymid: String(profile.value.telegram_id||'') }).catch(()=>{}) } catch {}
+      try { await f({ type: 'preload', ymid: String(profile.value.telegram_id || '') }).catch(() => {}) } catch {}
       ready.value = true
       return true
     }
@@ -65,30 +48,49 @@ async function waitSdk(ms=5000) {
   return false
 }
 
-/* Điểm danh: xem quảng cáo -> cộng thưởng -> lưu */
-async function doCheckin() {
+/* ----- API ----- */
+async function loadStatus () {
+  const r = await fetch('/api/checkin', { credentials: 'include' })
+  if (!r.ok) throw new Error(await r.text())
+  const data = await r.json()
+  // đồng bộ client
+  state.value.day_index     = Number(data.day_index || 1)
+  state.value.remaining     = Number(data.remaining || 0)
+  state.value.htw_balance   = Number(data.htw_balance || 0)
+  state.value.checked_today = !!data.checked_today
+  // lấy telegram id (nếu server trả kèm)
+  if (data.telegram_id) profile.value.telegram_id = String(data.telegram_id)
+}
+
+async function doCheckin () {
   if (busy.value || checkedToday.value || !ready.value) return
   busy.value = true; msg.value = ''
-
   try {
+    // 1) buộc xem ad trước
     const f = fnRef.value
     if (!f) throw new Error('SDK chưa sẵn sàng')
-    // show ad
-    await f({ ymid: String(profile.value.telegram_id||'') })
+    await f({ ymid: String(profile.value.telegram_id || '') })
 
-    // cộng thưởng
-    const add = rewards[state.value.day-1] || 1
-    state.value.balance = Number(state.value.balance||0) + add
-    state.value.last = Date.now()
-    state.value.day = state.value.day === 7 ? 1 : state.value.day+1
-    save()
+    // 2) gọi server chấm công thật
+    const r = await fetch('/api/checkin', { method: 'POST', credentials: 'include' })
+    const data = await r.json().catch(() => ({}))
+    if (!r.ok || data?.ok !== true) {
+      msg.value = data?.message || 'Điểm danh thất bại.'
+      return
+    }
 
+    // 3) cập nhật UI theo dữ liệu thật từ server
+    state.value.htw_balance   = Number(data.htw_balance ?? state.value.htw_balance)
+    state.value.day_index     = Number(data.day_index   ?? state.value.day_index)
+    state.value.remaining     = Number(data.remaining   ?? 0)
+    state.value.checked_today = true
+
+    const add = Number(data.add || 0)
     msg.value = `+${add} HTW`
     try { window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('success') } catch {}
-    setTimeout(()=> msg.value='', 1500)
+    setTimeout(() => { msg.value = '' }, 1500)
   } catch (e) {
-    msg.value = 'Không xem được quảng cáo.'
-    setTimeout(()=> msg.value='', 2000)
+    msg.value = e?.message || 'Không xem được quảng cáo.'
   } finally {
     busy.value = false
   }
@@ -96,16 +98,16 @@ async function doCheckin() {
 
 /* Init */
 onMounted(async () => {
-  // lấy profile tối giản (không có cũng okay)
   try {
-    const r = await fetch('/api/profile', { credentials:'include' })
-    if (r.ok) {
-      const j = await r.json()
-      profile.value.telegram_id = j.telegram_id || ''
-      state.value.balance = Number(j.htw_balance || state.value.balance || 0)
-    }
-  } catch {}
-  load()
+    await loadStatus()
+  } catch (e) {
+    console.error(e)
+    // vẫn cố gắng lấy profile để ymid cho Monetag (không bắt buộc)
+    try {
+      const r = await fetch('/api/profile', { credentials: 'include' })
+      if (r.ok) { const j = await r.json(); profile.value.telegram_id = j.telegram_id || '' }
+    } catch {}
+  }
   await waitSdk()
 })
 </script>
@@ -119,7 +121,7 @@ onMounted(async () => {
         <div class="icon"><i class="bi bi-calendar-check"></i></div>
         <div class="info">
           <div class="lbl">Số dư HTW</div>
-          <div class="val">{{ state.balance.toLocaleString() }} HTW</div>
+          <div class="val">{{ state.htw_balance.toLocaleString() }} HTW</div>
         </div>
       </section>
 
@@ -128,8 +130,8 @@ onMounted(async () => {
           <div
             v-for="d in 7" :key="d"
             :class="['day',
-              d < state.day || (d===state.day && checkedToday) ? 'done' :
-              d === state.day ? 'cur' : 'lock'
+              d < day || (d===day && checkedToday) ? 'done' :
+              d === day ? 'cur' : 'lock'
             ]"
           >
             <div class="n">{{ d }}</div>
@@ -159,7 +161,6 @@ onMounted(async () => {
 </template>
 
 <style scoped>
-/* layout */
 .page{--bg:#0b0f1a;--card:#101826;--mut:#9aa3b2;--ring:1px solid rgba(148,163,184,.14);
   background:var(--bg);color:#e5e7eb;min-height:100vh}
 .top{position:sticky;top:0;z-index:10;padding:14px 16px;
@@ -167,31 +168,23 @@ onMounted(async () => {
   backdrop-filter:blur(8px)}
 .top h1{margin:0;font:800 20px/1 ui-sans-serif,system-ui}
 .wrap{padding:12px 16px calc(96px + env(safe-area-inset-bottom));display:grid;gap:12px}
-
 .card{background:var(--card);border:var(--ring);border-radius:14px;padding:14px}
 .head{display:flex;align-items:center;gap:12px}
 .icon{width:44px;height:44px;border-radius:12px;display:grid;place-items:center;
   background:linear-gradient(145deg,#06b6d4,#2563eb)}
 .info .lbl{font-size:12px;color:var(--mut)}
 .info .val{font:800 20px/1.1 ui-sans-serif,system-ui}
-
-/* days */
 .days{display:grid;grid-template-columns:repeat(7,1fr);gap:8px;margin-bottom:10px}
 .day{border-radius:12px;padding:8px 4px;text-align:center;border:var(--ring)}
-.day .n{font-weight:800}
-.day .r{font-size:12px;color:var(--mut)}
+.day .n{font-weight:800}.day .r{font-size:12px;color:var(--mut)}
 .day.cur{background:#132036;border-color:#3b82f6}
 .day.done{background:#0f2a1c;border-color:#16a34a}
 .day.lock{opacity:.6}
-
-/* button */
 .btn{width:100%;padding:12px;border:none;border-radius:12px;
   background:linear-gradient(145deg,#9ae6b4,#60a5fa);color:#0b0f1a;font-weight:900;
   display:flex;align-items:center;justify-content:center;gap:8px}
 .btn:disabled{opacity:.55}
 .spin{animation:spin 1s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}
-
-/* misc */
 .msg{margin-top:8px;background:#064e3b;color:#a7f3d0;border:1px solid #065f46;
   padding:8px 10px;border-radius:10px;text-align:center}
 .hint{margin-top:8px;color:#eab308;font-size:13px}
