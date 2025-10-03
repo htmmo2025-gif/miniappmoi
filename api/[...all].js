@@ -18,12 +18,15 @@ import taskAdsgramReward from '../server/handlers/tasks/adsgram-reward.js'
 // ===== others (mine/swap/wheel) =====
 import mine      from '../server/handlers/mine.js'
 import swap      from '../server/handlers/swap.js'
-import wheelSpin from '../server/handlers/wheel/spin.js'
+// ===== wheel =====
+import wheelStatus from '../server/handlers/wheel/status.js'
+import wheelSpin   from '../server/handlers/wheel/spin.js'
 
 // ===== admin =====
 import adminWhoami         from '../server/handlers/admin/whoami.js'
 import adminWithdraws      from '../server/handlers/admin/withdraws.js'
 import adminWithdrawAction from '../server/handlers/admin/withdraw_action.js'
+
 
 // ===== route map =====
 const routes = {
@@ -47,6 +50,8 @@ const routes = {
   'GET /api/mine'       : mine,
   'POST /api/mine'       : mine,
   'POST /api/swap'       : swap,
+  // Wheel
+  'GET /api/wheel'       : wheelStatus,
   'POST /api/wheel/spin' : wheelSpin,
 
   // admin
