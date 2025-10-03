@@ -53,7 +53,7 @@ const routes = {
 
 // ===== utils =====
 function setCors(req, res) {
-  // với credentials:true, không được dùng '*'
+  // Khi dùng credentials, KHÔNG được dùng '*'
   const origin =
     req.headers.origin ||
     (req.headers.host ? `https://${req.headers.host}` : '*')
@@ -64,7 +64,6 @@ function setCors(req, res) {
   res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS,HEAD')
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Telegram-Id')
 }
-
 function sendJSON(res, code, data) {
   res.statusCode = code
   res.setHeader('content-type', 'application/json; charset=utf-8')
@@ -79,11 +78,9 @@ function normalizePathname(url) {
 // ===== main handler =====
 export default async function handler(req, res) {
   try {
-    setCors(req, res) // <<< quan trọng
+    setCors(req, res) // <<< SỬA Ở ĐÂY
 
-    // preflight
     if (req.method === 'OPTIONS' || req.method === 'HEAD') {
-      // vẫn giữ CORS header ở đây
       res.statusCode = 204
       return res.end()
     }
