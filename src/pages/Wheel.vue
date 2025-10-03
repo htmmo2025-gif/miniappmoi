@@ -1,30 +1,53 @@
 <!-- src/pages/Wheel.vue -->
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { LuckyWheel } from '@lucky-canvas/vue'
+import { ref, onMounted, onUnmounted, computed } from 'vue'
 import BottomNav from '../components/BottomNav.vue'
+import { LuckyWheel } from '@lucky-canvas/vue'
 
-/** ENV: reward-XXXXX (Block type: Reward) */
-const raw = String(import.meta.env.VITE_ADSGRAM_REWARD_ID ?? '').trim()
-const rewardBlockId = /^reward-\d+$/i.test(raw) ? raw : (/^\d+$/.test(raw) ? `reward-${raw}` : '')
-
-/* ====== state ====== */
-const sdkReady = ref(false)
-const rewardEl = ref(null)
-
+/* ====== STATE ====== */
 const wheelRef = ref(null)
-const spinning = ref(false)
-const toastMsg = ref('')
+
+const state = ref({
+  cooldown: 600,      // 10 phút mặc định (server có thể trả khác)
+  remaining: 0,       // giây còn lại để xem ad/quay
+  htw_balance: 0,     // số dư
+})
+const busy = ref(false)
+const loading = ref(true)
 const msg = ref('')
+const spinning = ref(false)
+const claimInProgress = ref(false) // chặn double click
 
-const spins = ref(0)
-const balance = ref(0)
-const adWait = ref(0) // seconds
-let waitTimer = null
+let timerId = null
 
-let lastSpinResult = null
+/* ====== ADSGRAM REWARD ====== */
+const REWARD_SDK_URL = 'https://sad.adsgram.ai/js/sad.min.js'
+const rewardBlockId = String(import.meta.env.VITE_ADSGRAM_WHEEL_REWARD_BLOCK_ID || '')
+const loadingRewardSdk = ref(false)
 
-/* ====== wheel UI ====== */
+function loadRewardSdk () {
+  if ([...document.scripts].some(s => s.src === REWARD_SDK_URL)) return Promise.resolve()
+  loadingRewardSdk.value = true
+  return new Promise((resolve, reject) => {
+    const s = document.createElement('script')
+    s.src = REWARD_SDK_URL
+    s.async = true
+    s.onload = () => { loadingRewardSdk.value = false; resolve() }
+    s.onerror = (e) => { loadingRewardSdk.value = false; reject(e) }
+    document.head.appendChild(s)
+  })
+}
+
+// “Giống mining”: luôn buộc xem Reward trước khi quay
+async function showRewardAd () {
+  if (!rewardBlockId) throw new Error('Thiếu VITE_ADSGRAM_REWARD_BLOCK_ID')
+  await loadRewardSdk()
+  const ctrl = window.Adsgram?.init?.({ blockId: String(rewardBlockId) })
+  if (!ctrl) throw new Error('Không khởi tạo được Adsgram Reward')
+  await ctrl.show()
+}
+
+/* ====== WHEEL UI ====== */
 const blocks = [{ padding: '12px', background: '#0f172a' }]
 const prizes = [
   { background: '#0ea5e9', fonts: [{ text: '+1 HTW',  top: '18px' }] },
@@ -32,15 +55,104 @@ const prizes = [
   { background: '#10b981', fonts: [{ text: 'Hụt 😅',  top: '18px' }] },
   { background: '#8b5cf6', fonts: [{ text: '+5 HTW',  top: '18px' }] },
   { background: '#ef4444', fonts: [{ text: 'Hụt 😅',  top: '18px' }] },
-  { background: '#22c55e', fonts: [{ text: '+10 HTW', top: '18px' }] }
+  { background: '#22c55e', fonts: [{ text: '+10 HTW', top: '18px' }] },
 ]
 const buttons = [
   { radius: '40px', background: '#2563eb', pointer: true, fonts: [{ text: 'SPIN', top: '-18px' }] }
 ]
 
-/* ====== helpers ====== */
+/* ====== GET/POST API ====== */
+async function loadStatus () {
+  loading.value = true
+  msg.value = ''
+  try {
+    const r = await fetch('/api/wheel', { credentials: 'include' })
+    if (!r.ok) throw new Error(await r.text())
+    const data = await r.json()
+    state.value.cooldown   = Number(data.cooldown ?? state.value.cooldown)
+    state.value.remaining  = Number(data.remaining ?? 0)
+    state.value.htw_balance = Number(data.htw_balance ?? 0)
+    if (state.value.remaining > 0) startTicker()
+  } catch (e) {
+    console.error(e)
+    msg.value = 'Không tải được trạng thái vòng quay.'
+  } finally {
+    loading.value = false
+  }
+}
+
+// Bắt đầu quay (workflow: Xem ad -> POST /api/wheel/spin -> spin theo index server trả)
+async function spin () {
+  if (!canSpin.value || claimInProgress.value) return
+  claimInProgress.value = true
+  busy.value = true
+  msg.value = ''
+
+  try {
+    // 1) BẮT BUỘC xem Reward trước
+    await showRewardAd().catch(e => { throw new Error(e?.message || 'Vui lòng xem quảng cáo để quay.') })
+
+    // 2) Gọi server để quyết định ô dừng + cộng HTW
+    const r = await fetch('/api/wheel/spin', { method: 'POST', credentials: 'include' })
+    const data = await r.json().catch(() => ({}))
+
+    // Server báo chưa hết cooldown
+    if (!r.ok || data?.ok !== true) {
+      const remain = Number(data?.remaining ?? state.value.cooldown)
+      state.value.remaining = remain
+      startTicker()
+      msg.value = data?.ok === false ? 'Chưa hết thời gian chờ.' : 'Quay thất bại.'
+      return
+    }
+
+    // 3) Quay & dừng theo index do server trả về (bảo đảm công bằng)
+    const idx = Number(data.index ?? 0) % prizes.length
+    spinning.value = true
+    wheelRef.value?.play?.()
+    setTimeout(() => { wheelRef.value?.stop?.(idx) }, 1000)
+
+    // 4) Cập nhật số dư & cooldown từ server (nếu server trả)
+    state.value.htw_balance = Number(data.htw_balance ?? state.value.htw_balance)
+    state.value.remaining   = Number(data.remaining ?? state.value.cooldown)
+    startTicker()
+
+    // Hiển thị +HTW nếu server có `add`
+    const add = Number(data.add ?? 0)
+    if (add > 0) toast(`+${add} HTW`)
+  } catch (e) {
+    console.error(e)
+    msg.value = e?.message || 'Quay thất bại, thử lại sau.'
+  } finally {
+    busy.value = false
+    setTimeout(() => { claimInProgress.value = false }, 1500)
+  }
+}
+
+/* ====== COUNTDOWN giống mining ====== */
+function startTicker () {
+  stopTicker()
+  timerId = setInterval(() => {
+    if (state.value.remaining > 0) {
+      state.value.remaining--
+    } else {
+      stopTicker()
+    }
+  }, 1000)
+}
+function stopTicker () {
+  if (timerId) { clearInterval(timerId); timerId = null }
+}
+const canSpin = computed(() =>
+  !busy.value && !spinning.value && !claimInProgress.value && state.value.remaining <= 0 && !loading.value
+)
+function fmtTime (sec) {
+  const m = Math.floor(sec / 60).toString().padStart(2, '0')
+  const s = Math.floor(sec % 60).toString().padStart(2, '0')
+  return `${m}:${s}`
+}
+
+/* ====== TOAST ====== */
 function toast (t) {
-  toastMsg.value = t
   const el = document.createElement('div')
   el.className = 'toast'
   el.textContent = t
@@ -49,142 +161,26 @@ function toast (t) {
   setTimeout(() => { el.classList.remove('show'); setTimeout(() => el.remove(), 250) }, 1600)
 }
 
-const waitLabel = computed(() => {
-  const s = Math.max(0, Number(adWait.value) || 0)
-  const m = Math.floor(s / 60)
-  const ss = String(s % 60).padStart(2, '0')
-  return `${m}:${ss}`
-})
-
-function startWaitCountdown (sec) {
-  clearInterval(waitTimer)
-  adWait.value = Math.max(0, Number(sec) || 0)
-  if (!adWait.value) return
-  waitTimer = setInterval(() => {
-    adWait.value -= 1
-    if (adWait.value <= 0) clearInterval(waitTimer)
-  }, 1000)
-}
-
-/* ====== AdsGram SDK (Reward) ====== */
-function loadSdkOnce () {
-  const url = 'https://sad.adsgram.ai/js/sad.min.js'
-  if ([...document.scripts].some(s => s.src === url)) { sdkReady.value = true; return Promise.resolve() }
-  return new Promise((resolve, reject) => {
-    const s = document.createElement('script')
-    s.src = url
-    s.async = true
-    s.onload = () => { sdkReady.value = true; resolve() }
-    s.onerror = (e) => { msg.value = 'Không tải được SDK Adsgram.'; reject(e) }
-    document.head.appendChild(s)
-  })
-}
-
-function bindRewardEvents () {
-  if (!rewardEl.value) return
-  // Khi người dùng xem xong quảng cáo (server sẽ cộng lượt qua Reward URL)
-  rewardEl.value.addEventListener('reward', () => {
-    toast('Đã nhận +1 lượt quay')
-    setTimeout(loadStatus, 900)
-    try { window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('success') } catch {}
-  })
-  rewardEl.value.addEventListener('onError', (e) => {
-    msg.value = 'Không xem được quảng cáo, thử lại sau.'
-    console.warn('Adsgram reward onError', e?.detail)
-  })
-  rewardEl.value.addEventListener('onTooLongSession', () => {
-    msg.value = 'Phiên quá dài, đang làm mới quảng cáo…'
-  })
-}
-function showAd () {
-  if (!sdkReady.value || !rewardBlockId) return
-  if (adWait.value > 0) return
-  rewardEl.value?.show?.()
-}
-
-/* ====== API ====== */
-async function loadStatus () {
-  try {
-    const r = await fetch('/api/wheel/status', { credentials: 'include' })
-    if (!r.ok) throw new Error(await r.text())
-    const j = await r.json()
-    spins.value = Number(j.spins ?? 0)
-    balance.value = Number(j.balance ?? 0)
-    startWaitCountdown(Number(j.ad_wait ?? 0))
-  } catch (e) {
-    console.error(e)
-    msg.value = 'Không tải được trạng thái vòng quay.'
-  }
-}
-
-async function onStart () {
-  if (spinning.value) return
-  if (spins.value <= 0) {
-    msg.value = 'Hết lượt quay. Xem quảng cáo để nhận thêm nhé!'
-    return
-  }
-  spinning.value = true
-  msg.value = ''
-
-  try {
-    const r = await fetch('/api/wheel/spin', { method: 'POST', credentials: 'include' })
-    lastSpinResult = r.ok ? await r.json() : null
-
-    let idx = 0
-    if (lastSpinResult && typeof lastSpinResult.index !== 'undefined') {
-      idx = Number(lastSpinResult.index) % prizes.length
-    } else {
-      // fallback (nếu backend chưa trả index)
-      idx = Math.floor(Math.random() * prizes.length)
-    }
-
-    wheelRef.value?.play?.()
-    setTimeout(() => wheelRef.value?.stop?.(idx), 1200)
-  } catch (e) {
-    console.error(e)
-    spinning.value = false
-    msg.value = 'Không quay được, thử lại nhé.'
-  }
-}
-
-function onEnd (prize) {
-  spinning.value = false
-
-  if (lastSpinResult?.ok) {
-    // backend đã trừ lượt & cộng HTW; dùng số liệu server trả về
-    spins.value = Number(lastSpinResult.spins ?? Math.max(0, spins.value - 1))
-    balance.value = Number(lastSpinResult.balance ?? balance.value)
-    const add = Number(lastSpinResult.add ?? 0)
-    if (add > 0) toast(`+${add} HTW`)
-  } else {
-    // fallback client – trừ 1 lượt
-    spins.value = Math.max(0, spins.value - 1)
-  }
-
-  const t = prize?.fonts?.[0]?.text || '—'
-  msg.value = `Kết quả: ${t}`
-  try { window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('light') } catch {}
-}
-
-/* ====== lifecycle ====== */
-onMounted(async () => {
-  await Promise.all([loadSdkOnce(), loadStatus()])
-  bindRewardEvents()
-})
-
-onUnmounted(() => {
-  clearInterval(waitTimer)
-})
+/* ====== LIFECYCLE ====== */
+onMounted(loadStatus)
+onUnmounted(stopTicker)
 </script>
 
 <template>
   <div class="page">
-    <header class="topbar">
-      <h1>Vòng quay may mắn</h1>
-    </header>
+    <header class="topbar"><h1>Vòng quay may mắn</h1></header>
 
     <main class="wrap">
-      <section class="card wheel-card">
+      <!-- Số dư -->
+      <section class="card hero">
+        <div class="hero-ic"><i class="bi bi-bullseye"></i></div>
+        <div class="hero-t">
+          <div class="label">Số dư HTW</div>
+          <div class="amount">{{ state.htw_balance.toLocaleString() }} <span>HTW</span></div>
+        </div>
+      </section>
+
+      <section class="card wheel">
         <LuckyWheel
           ref="wheelRef"
           :width="320"
@@ -192,45 +188,36 @@ onUnmounted(() => {
           :blocks="blocks"
           :prizes="prizes"
           :buttons="buttons"
-          @start="onStart"
-          @end="onEnd"
         />
 
-        <div class="stats">
-          <div class="pill">Lượt quay: <b>{{ spins }}</b></div>
-          <div class="pill">Số dư: <b>{{ balance.toLocaleString() }}</b> HTW</div>
+        <div class="cooldown" v-if="state.remaining > 0">
+          <i class="bi bi-hourglass-split"></i>
+          Còn lại: <b>{{ fmtTime(state.remaining) }}</b>
         </div>
 
         <button
-          class="ad-btn"
-          :disabled="!sdkReady || !rewardBlockId || adWait>0"
-          @click="showAd"
+          class="btn"
+          :disabled="!canSpin || loading || loadingRewardSdk"
+          @click="spin"
         >
-          <i class="bi bi-play-circle"></i>
-          <span>Xem quảng cáo</span>
-          <small>+1 lượt</small>
+          <i v-if="busy || loading || loadingRewardSdk" class="bi bi-arrow-repeat spin"></i>
+          <i v-else class="bi bi-play-circle"></i>
+          <span>{{ state.remaining > 0 ? 'Chưa thể quay' : 'Quay ngay' }}</span>
         </button>
-        <p class="mut" v-if="adWait>0">Chờ xem quảng cáo: <b>{{ waitLabel }}</b></p>
 
-        <p v-if="msg" class="msg"><i class="bi bi-info-circle"></i> {{ msg }}</p>
+        <p v-if="!rewardBlockId" class="note warn">
+          ⚠️ Thiếu <b>VITE_ADSGRAM_REWARD_BLOCK_ID</b> nên không thể hiển thị quảng cáo Reward.
+        </p>
+        <p v-if="msg" class="note">{{ msg }}</p>
       </section>
 
-      <!-- web component AdsGram Reward (ẩn, gọi bằng .show()) -->
-      <adsgram-reward
-        v-if="sdkReady && rewardBlockId"
-        ref="rewardEl"
-        :data-block-id="rewardBlockId"
-        data-debug="false"
-        data-debug-console="false"
-        style="display:none"
-      />
-      <p v-else-if="!rewardBlockId" class="warn">
-        Thiếu <b>VITE_ADSGRAM_REWARD_ID</b> (đặt dạng <code>reward-XXXXX</code>).
-      </p>
-      <p v-else-if="!sdkReady" class="warn">Đang tải SDK Adsgram…</p>
+      <section v-if="loading" class="card center">
+        <i class="bi bi-hourglass-split big spin"></i>
+        <div>Đang tải…</div>
+      </section>
     </main>
 
-    <BottomNav/>
+    <BottomNav />
   </div>
 </template>
 
@@ -247,30 +234,36 @@ onUnmounted(() => {
 }
 .topbar h1{margin:0; font:800 20px/1 ui-sans-serif,system-ui}
 .wrap{padding:16px 16px calc(92px + env(safe-area-inset-bottom))}
-.card{
-  background:var(--card); border:var(--ring); border-radius:16px; padding:18px;
-  box-shadow: 0 10px 30px rgba(2,8,23,.35)
+.card{background:var(--card); border:var(--ring); border-radius:16px; padding:18px; box-shadow:0 10px 30px rgba(2,8,23,.35)}
+.card.center{display:grid;place-items:center;gap:10px;padding:28px}
+.big{font-size:38px}
+
+.hero{display:flex; gap:12px; align-items:center}
+.hero-ic{width:44px;height:44px;border-radius:12px;background:linear-gradient(145deg,#06b6d4,#2563eb);display:grid;place-items:center}
+.hero-t .label{font-size:12px;color:var(--mut)}
+.hero-t .amount{font:800 22px/1.1 ui-sans-serif,system-ui}
+.hero-t .amount span{font:700 12px; opacity:.85; margin-left:6px}
+
+.wheel{display:grid;place-items:center;gap:12px}
+.cooldown{display:flex;align-items:center;gap:8px;color:#9fb2d0;margin:6px 0 2px}
+
+.btn{
+  width:100%; padding:14px; border-radius:14px; border:none; color:#0b0f1a; font-weight:900;
+  background:linear-gradient(145deg,#fde68a,#60a5fa);
+  display:flex; align-items:center; justify-content:center; gap:8px;
+  transition: opacity .2s;
 }
-.wheel-card{ display:grid; place-items:center; gap:12px }
-.stats{display:flex; gap:8px; flex-wrap:wrap; justify-content:center}
-.pill{
-  background:#0e1525; border:1px solid #334155; color:#cbd5e1;
-  padding:6px 10px; border-radius:999px; font-size:12px; font-weight:800;
+.btn:disabled{opacity:.5; cursor:not-allowed;}
+.btn:not(:disabled):active{opacity:.85}
+
+.note{
+  margin-top:10px; padding:10px 12px; border-radius:10px;
+  background:#0e1525; color:#cbd5e1; font-size:13px;
 }
-.ad-btn{
-  display:inline-flex; align-items:center; gap:8px;
-  background:#2563eb; color:#fff; border:none; border-radius:12px;
-  height:40px; padding:0 14px; font-weight:900; cursor:pointer;
-  box-shadow:0 6px 16px rgba(37,99,235,.35);
-}
-.ad-btn:disabled{ opacity:.55; cursor:not-allowed }
-.ad-btn small{ font-weight:700; opacity:.9 }
-.mut{margin:4px 0 0; color:var(--mut); font-size:12px}
-.msg{
-  margin-top:6px; padding:8px 10px; background:#1e293b; border-radius:10px; font-size:12px;
-  display:inline-flex; gap:6px; align-items:center
-}
-.warn{margin-top:10px; color:#fbbf24; font-size:12px}
+.note.warn{background:#422006; color:#fed7aa; border:1px solid #92400e}
+
+.spin{animation:spin 1s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
 
 /* toast */
 :global(.toast){
