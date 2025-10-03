@@ -1,7 +1,7 @@
 <!-- src/pages/AdminWithdraws.vue -->
 <script setup>
 import { ref, onMounted, computed } from 'vue'
-import BottomNav from '../components/BottomNav.vue'
+
 
 const items = ref([])
 const filter = ref('pending')  // pending | completed | rejected | all
@@ -117,8 +117,6 @@ onMounted(loadList)
         </div>
       </div>
     </main>
-
-    <BottomNav />
   </div>
 </template>
 
