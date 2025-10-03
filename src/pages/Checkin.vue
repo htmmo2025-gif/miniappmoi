@@ -1,121 +1,79 @@
-<!-- /src/pages/Checkin.vue -->
+<!-- src/pages/Checkin.vue -->
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import BottomNav from '../components/BottomNav.vue'
 
-const profile = ref({ telegram_id: '' })
-const day = ref(1)          // 1..7
-const remaining = ref(0)    // giây cooldown tới 0h
-const balance = ref(0)      // số dư thật
-const busy = ref(false)
-const ready = ref(false)    // Monetag SDK
-const fnRef = ref(null)
+const state = ref({ day: 1, checkedToday: false, balance: 0 })
 const msg = ref('')
+const busy = ref(false)
+const ready = ref(false)      // Monetag SDK sẵn sàng?
+const monetagFn = ref(null)   // window['show_<ZONE_ID>']
 
-const REWARDS = [1,2,3,4,5,6,7]
-
-const checkedToday = computed(() => remaining.value > 0)
-const nextReward = computed(() => REWARDS[Math.max(0, day.value - 1)])
-
-function todayStart() { const d = new Date(); d.setHours(0,0,0,0); return d.getTime() }
-
-function getUserId() {
-  return String(
-    profile.value?.telegram_id ||
-    window?.Telegram?.WebApp?.initDataUnsafe?.user?.id || ''
-  )
-}
-
-/* ---------- Monetag ---------- */
+/* ==== Monetag (siêu gọn) ==== */
 function detectMonetagFnName() {
   const s = [...document.scripts].find(x => /liblt\.com\/sdk\.js|lib11\.com\/sdk\.js/.test(x.src))
-  const zone = s?.getAttribute('data-zone')
   const name = s?.getAttribute('data-sdk')
   if (name) return name
-  if (zone) return `show_${zone}`
-  const z = import.meta.env.VITE_MONETAG_ZONE_ID
-  return z ? `show_${z}` : null
+  const zone = s?.getAttribute('data-zone') || import.meta.env.VITE_MONETAG_ZONE_ID
+  return zone ? `show_${zone}` : null
 }
-async function waitSdk(ms=5000) {
+async function waitSdk(ms = 5000) {
   const name = detectMonetagFnName()
   const t0 = Date.now()
-  while (Date.now()-t0 < ms) {
+  while (Date.now() - t0 < ms) {
     const f = name && window[name]
-    if (typeof f === 'function') {
-      fnRef.value = f
-      try { await f({ type:'preload', ymid: getUserId() }).catch(()=>{}) } catch {}
-      ready.value = true
-      return true
-    }
+    if (typeof f === 'function') { monetagFn.value = f; ready.value = true; return }
     await new Promise(r => setTimeout(r, 100))
   }
-  return false
 }
 
-/* ---------- API ---------- */
+/* ==== API ==== */
 async function loadStatus() {
-  const tid = getUserId()
-  const r = await fetch(`/api/checkin?tid=${encodeURIComponent(tid)}`, { credentials:'include' })
-  if (!r.ok) throw new Error(await r.text())
-  const j = await r.json()
-  day.value = j.day ?? 1
-  remaining.value = j.remaining ?? 0
-  balance.value = Number(j.balance ?? 0)
+  const r = await fetch('/api/checkin', { credentials: 'include' })
+  const j = await r.json().catch(() => ({}))
+  if (r.ok && j?.ok) {
+    state.value.day = j.day
+    state.value.checkedToday = !!j.checkedToday
+    state.value.balance = Number(j.balance || 0)
+  } else {
+    msg.value = 'Không tải được trạng thái điểm danh.'
+    setTimeout(()=>msg.value='', 2200)
+  }
 }
 
 async function doCheckin() {
-  if (busy.value || checkedToday.value || !ready.value) return
+  if (busy.value || state.value.checkedToday || !ready.value) return
   busy.value = true; msg.value = ''
+
   try {
-    const f = fnRef.value
-    if (!f) throw new Error('SDK chưa sẵn sàng')
-    const uid = getUserId()
-    if (!uid) throw new Error('Thiếu Telegram ID')
+    // 1) Buộc xem quảng cáo
+    await monetagFn.value?.({}).catch(() => { throw new Error('ad_failed') })
 
-    // BẮT BUỘC xem Ad
-    await f({ ymid: uid })
+    // 2) Gọi API checkin
+    const r = await fetch('/api/checkin', { method:'POST', credentials:'include' })
+    const j = await r.json().catch(() => ({}))
 
-    // GỌI API thật
-    const r = await fetch(`/api/checkin?tid=${encodeURIComponent(uid)}`, {
-      method: 'POST', credentials: 'include'
-    })
-    const j = await r.json().catch(()=> ({}))
-    if (!r.ok || j.ok !== true) {
-      remaining.value = Number(j.remaining ?? remaining.value)
-      msg.value = 'Chưa thể điểm danh, thử lại sau.'
-      return
+    if (r.status === 409) {               // đã điểm danh hôm nay
+      state.value.checkedToday = true
+      msg.value = 'Đã điểm danh hôm nay.'
+    } else if (r.ok && j?.ok) {           // thành công
+      state.value.balance = Number(j.balance || state.value.balance)
+      state.value.day = Math.min((j.day || state.value.day), 7)
+      state.value.checkedToday = true
+      msg.value = `+${j.add || 0} HTW`
+      try { window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('success') } catch {}
+    } else {
+      msg.value = 'Không thể điểm danh, thử lại sau.'
     }
-
-    balance.value = Number(j.balance ?? balance.value)
-    day.value = j.day ?? day.value
-    remaining.value = j.remaining ?? remaining.value
-
-    msg.value = `+${j.add} HTW`
-    try { window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('success') } catch {}
-    setTimeout(()=> msg.value = '', 1500)
-  } catch (e) {
-    console.error(e)
-    msg.value = e?.message?.includes('ID') ? 'Thiếu Telegram ID — hãy mở trong Telegram.' : 'Không xem được quảng cáo.'
-    setTimeout(()=> msg.value='', 2000)
+  } catch {
+    msg.value = 'Không xem được quảng cáo.'
   } finally {
     busy.value = false
+    setTimeout(()=>msg.value='', 1800)
   }
 }
 
-/* ---------- init ---------- */
-onMounted(async () => {
-  try {
-    // Lấy profile thật (để hiện số dư + id)
-    const pr = await fetch('/api/profile', { credentials:'include' })
-    if (pr.ok) {
-      const j = await pr.json()
-      profile.value.telegram_id = j.telegram_id || ''
-      balance.value = Number(j.htw_balance || 0)
-    }
-  } catch {}
-  await loadStatus().catch(()=>{})
-  await waitSdk()
-})
+const nextReward = computed(() => Math.min(state.value.day, 7))
 </script>
 
 <template>
@@ -127,32 +85,31 @@ onMounted(async () => {
         <div class="icon"><i class="bi bi-calendar-check"></i></div>
         <div class="info">
           <div class="lbl">Số dư HTW</div>
-          <div class="val">{{ balance.toLocaleString() }} HTW</div>
+          <div class="val">{{ state.balance.toLocaleString() }} HTW</div>
         </div>
       </section>
 
       <section class="card">
         <div class="days">
-          <div
-            v-for="d in 7" :key="d"
-            :class="['day',
-              d < day || (d===day && checkedToday) ? 'done' :
-              d === day ? 'cur' : 'lock']"
-          >
+          <div v-for="d in 7" :key="d"
+               :class="['day',
+                 d < state.day || (d===state.day && state.checkedToday) ? 'done' :
+                 d === state.day ? 'cur' : 'lock'
+               ]">
             <div class="n">{{ d }}</div>
-            <div class="r">+{{ REWARDS[d-1] }}</div>
+            <div class="r">+{{ d }}</div>
           </div>
         </div>
 
         <button class="btn"
-          :disabled="busy || checkedToday || !ready"
-          @click="doCheckin">
+                :disabled="busy || state.checkedToday || !ready"
+                @click="doCheckin">
           <i v-if="busy" class="bi bi-arrow-repeat spin"></i>
           <i v-else class="bi bi-play-circle"></i>
           <span>
             {{ !ready ? 'Đang tải quảng cáo...' :
-               checkedToday ? 'Đã điểm danh hôm nay' :
-               'Xem quảng cáo & điểm danh (+'+ (nextReward||1) +' HTW)' }}
+               state.checkedToday ? 'Đã điểm danh hôm nay' :
+               'Xem quảng cáo & điểm danh (+'+ nextReward +' HTW)' }}
           </span>
         </button>
 
@@ -199,3 +156,7 @@ onMounted(async () => {
   padding:8px 10px;border-radius:10px;text-align:center}
 .hint{margin-top:8px;color:#eab308;font-size:13px}
 </style>
+
+<script setup>
+onMounted(async () => { await waitSdk(); await loadStatus() })
+</script>
