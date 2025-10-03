@@ -53,14 +53,24 @@ const routes = {
 
 // ===== utils =====
 function setCors(req, res) {
-  // khi dùng credentials, KHÔNG dùng '*'
-  const origin = req.headers.origin || (req.headers.host ? `https://${req.headers.host}` : '*')
-  res.setHeader('Access-Control-Allow-Origin', origin)
-  res.setHeader('Vary', 'Origin')
-  res.setHeader('Access-Control-Allow-Credentials', 'true')
+  const origin =
+    req.headers?.origin ||
+    req.headers?.referer ||
+    '*'
+
+  if (origin !== '*') {
+    res.setHeader('Access-Control-Allow-Origin', origin)
+    res.setHeader('Vary', 'Origin')
+    res.setHeader('Access-Control-Allow-Credentials', 'true')
+  } else {
+    // fallback
+    res.setHeader('Access-Control-Allow-Origin', '*')
+  }
+
   res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS,HEAD')
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Telegram-Id')
 }
+
 function sendJSON(res, code, data) {
   res.statusCode = code
   res.setHeader('content-type', 'application/json; charset=utf-8')
@@ -75,17 +85,15 @@ function normalizePathname(url) {
 // ===== main handler =====
 export default async function handler(req, res) {
   try {
-    setCors(req, res)
+    setCors(req, res) // <-- truyền đúng (req, res)
 
     if (req.method === 'OPTIONS' || req.method === 'HEAD') {
       res.statusCode = 204
       return res.end()
     }
-
     const key = `${req.method.toUpperCase()} ${normalizePathname(req.url)}`
     const fn = routes[key]
     if (!fn) return sendJSON(res, 404, { error: 'not_found', route: key })
-
     return await fn(req, res)
   } catch (e) {
     console.error('router error:', e)
@@ -93,5 +101,5 @@ export default async function handler(req, res) {
   }
 }
 
-// Node serverless runtime (đừng dùng "nodejs20.x")
+// Node serverless runtime (không dùng "nodejs20.x")
 export const config = { runtime: 'nodejs' }
