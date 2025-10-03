@@ -1,88 +1,130 @@
+<!-- src/pages/Withdraw.vue -->
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 
+/* ======= STATE ======= */
 const prof = ref(null)
-const amount = ref('')
-const channel = ref('bank')
-const dest = ref('')
+
+const amount = ref('')          // string để dễ bind input
+const channel = ref('bank')     // hiện chỉ hỗ trợ bank
 const bankName = ref('')
+const accountNumber = ref('')   // dest
 const accountName = ref('')
+
 const msg = ref('')
 const busy = ref(false)
 const items = ref([])
 
-const getStatusClass = (s) =>
-  s === 'completed' ? 'st-done' : s === 'rejected' ? 'st-reject' : 'st-pending'
+/* ======= HELPERS ======= */
+function getTid() {
+  return String(
+    prof.value?.telegram_id ||
+    window?.Telegram?.WebApp?.initDataUnsafe?.user?.id || ''
+  )
+}
 
-const getStatusText = (s) =>
-  s === 'completed' ? 'Hoàn thành' : s === 'rejected' ? 'Bị từ chối' : 'Đang xử lý'
+const canSubmit = computed(() => {
+  const n = Number(amount.value)
+  return !busy.value
+    && getTid()
+    && Number.isFinite(n) && n >= 2000
+    && bankName.value.trim()
+    && accountNumber.value.trim()
+    && accountName.value.trim()
+})
 
-async function loadProfile () {
+function statusClass(s) {
+  return s === 'completed' ? 'st-done'
+       : s === 'rejected'  ? 'st-reject'
+       : 'st-pending'
+}
+function statusText(s) {
+  return s === 'completed' ? 'Hoàn thành'
+       : s === 'rejected'  ? 'Bị từ chối'
+       : 'Đang xử lý'
+}
+function fmtDate(s) {
+  return new Date(s).toLocaleString('vi-VN', {
+    day:'2-digit', month:'2-digit', year:'numeric',
+    hour:'2-digit', minute:'2-digit'
+  })
+}
+
+/* ======= API ======= */
+async function loadProfile() {
   const r = await fetch('/api/profile', { credentials: 'include' })
   if (r.ok) prof.value = await r.json()
 }
 
-async function loadList () {
-  const r = await fetch('/api/withdraw', { credentials: 'include' })
+async function loadList() {
+  const tid = getTid()
+  if (!tid) return
+  const r = await fetch(`/api/withdraw?tid=${encodeURIComponent(tid)}`, { credentials: 'include' })
   if (r.ok) items.value = await r.json()
 }
 
-async function submit () {
+async function submit() {
   msg.value = ''
-  busy.value = true
+  if (!canSubmit.value) {
+    msg.value = 'Vui lòng nhập đủ thông tin và số tiền ≥ 2.000 VND'
+    return
+  }
 
   const n = Number(amount.value)
-  if (!Number.isFinite(n) || n < 2000) {
-    msg.value = 'Tối thiểu 2.000 VND'
-    busy.value = false; return
-  }
-  if (n > (prof.value?.vnd_balance ?? 0)) { msg.value = 'Số dư không đủ'; busy.value = false; return }
-  if (!dest.value.trim() || !bankName.value.trim() || !accountName.value.trim()) {
-    msg.value = 'Vui lòng điền đầy đủ thông tin ngân hàng'; busy.value = false; return
+  const bal = Number(prof.value?.vnd_balance || 0)
+  if (n > bal) {
+    msg.value = 'Số dư không đủ'
+    return
   }
 
+  busy.value = true
   try {
-    const r = await fetch('/api/withdraw', {
+    const tid = getTid()
+    const r = await fetch(`/api/withdraw?tid=${encodeURIComponent(tid)}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
       body: JSON.stringify({
         amount_vnd: n,
         channel: channel.value,
-        dest: dest.value.trim(),
+        dest: accountNumber.value.trim(),
         bank_name: bankName.value.trim(),
         account_name: accountName.value.trim()
       })
     })
 
-    const data = await r.json().catch(()=> ({}))
-    if (!r.ok) {
-      if (data?.error === 'daily_limit')   msg.value = 'Hôm nay bạn đã tạo 1 yêu cầu rút. Thử lại vào ngày mai.'
+    const data = await r.json().catch(() => ({}))
+
+    if (!r.ok || data?.ok !== true) {
+      // map lỗi từ API
+      if (data?.error === 'daily_limit')   msg.value = 'Mỗi ngày chỉ rút 1 lần. Thử lại vào ngày mai.'
       else if (data?.error === 'min_withdraw') msg.value = 'Tối thiểu 2.000 VND'
       else if (data?.error === 'insufficient') msg.value = 'Số dư không đủ'
+      else if (data?.error === 'missing_user') msg.value = 'Thiếu Telegram ID — mở app trong Telegram.'
       else msg.value = 'Không tạo được lệnh rút.'
-      busy.value = false
       return
     }
 
-    amount.value = ''; dest.value = ''; bankName.value = ''; accountName.value = ''
+    // reset form + refresh
+    amount.value = ''
+    bankName.value = ''
+    accountNumber.value = ''
+    accountName.value = ''
+
     await Promise.all([loadProfile(), loadList()])
     msg.value = 'Tạo lệnh rút thành công! Chờ xử lý...'
   } catch (e) {
-    msg.value = 'Lỗi kết nối. Thử lại sau.'
+    msg.value = 'Lỗi máy chủ. Thử lại sau.'
   } finally {
     busy.value = false
   }
 }
 
-
-function formatDate (s) {
-  return new Date(s).toLocaleString('vi-VN', {
-    day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit'
-  })
-}
-
-onMounted(() => Promise.all([loadProfile(), loadList()]))
+/* ======= INIT ======= */
+onMounted(async () => {
+  await loadProfile()
+  await loadList()
+})
 </script>
 
 <template>
@@ -95,14 +137,13 @@ onMounted(() => Promise.all([loadProfile(), loadList()]))
     </header>
 
     <main class="wrap">
-      <!-- Số dư -->
-      <section v-if="prof" class="card hero">
+      <!-- Balance -->
+      <section class="card hero" v-if="prof">
         <div class="hero-ic"><i class="bi bi-wallet2"></i></div>
         <div class="hero-text">
           <div class="label">Số dư khả dụng</div>
           <div class="amount">
-            {{ (prof.vnd_balance ?? 0).toLocaleString() }}
-            <span>VND</span>
+            {{ Number(prof.vnd_balance || 0).toLocaleString() }} <span>VND</span>
           </div>
         </div>
       </section>
@@ -117,20 +158,14 @@ onMounted(() => Promise.all([loadProfile(), loadList()]))
               v-model="amount"
               type="number"
               inputmode="numeric"
-              pattern="[0-9]*"
-              min="1" step="1000" placeholder="0"
+              min="2000" step="1000" placeholder="Tối thiểu 2.000"
             />
             <span class="cur">VND</span>
           </div>
 
           <div class="chip-grid">
-            <button
-              v-for="a in [2000,10000,20000,50000]"
-              :key="a"
-              class="chip"
-              type="button"
-              @click="amount = a.toString()"
-            >{{ a/1000 }}K</button>
+            <button v-for="a in [2000,10000,20000,50000]" :key="a" class="chip" type="button"
+                    @click="amount = String(a)">{{ a/1000 }}K</button>
           </div>
         </div>
 
@@ -139,13 +174,13 @@ onMounted(() => Promise.all([loadProfile(), loadList()]))
           <input class="txt" v-model="bankName" placeholder="VD: Vietcombank, BIDV, Techcombank..." />
 
           <label class="lbl"><i class="bi bi-credit-card-2-front"></i> Số tài khoản</label>
-          <input class="txt" v-model="dest" type="number" inputmode="numeric" placeholder="1234567890" />
+          <input class="txt" v-model="accountNumber" inputmode="numeric" placeholder="1234567890" />
 
           <label class="lbl"><i class="bi bi-person"></i> Tên chủ tài khoản</label>
           <input class="txt up" v-model="accountName" placeholder="NGUYEN VAN A" />
         </div>
 
-        <button class="btn" :disabled="busy || !amount || !dest || !bankName || !accountName" @click="submit">
+        <button class="btn" :disabled="!canSubmit" @click="submit">
           <div v-if="busy" class="spin"></div>
           <i v-else class="bi bi-arrow-right-circle"></i>
           <span>{{ busy ? 'Đang xử lý...' : 'Tạo lệnh rút' }}</span>
@@ -157,7 +192,7 @@ onMounted(() => Promise.all([loadProfile(), loadList()]))
         </p>
       </section>
 
-      <!-- Lịch sử -->
+      <!-- History -->
       <section class="card">
         <div class="section-title"><i class="bi bi-clock-history"></i> Lịch sử rút tiền</div>
 
@@ -174,11 +209,11 @@ onMounted(() => Promise.all([loadProfile(), loadList()]))
                 <div class="row-amt">-{{ Number(it.amount_vnd).toLocaleString() }} VND</div>
                 <div class="row-sub">{{ it.bank_name || 'Ngân hàng' }} — {{ it.dest }}</div>
                 <div class="row-sub name">{{ it.account_name || 'Tên tài khoản' }}</div>
-                <div class="row-date">{{ formatDate(it.created_at) }}</div>
+                <div class="row-date">{{ fmtDate(it.created_at) }}</div>
               </div>
             </div>
             <div class="row-r">
-              <span :class="['st', getStatusClass(it.status)]">{{ getStatusText(it.status) }}</span>
+              <span :class="['st', statusClass(it.status)]">{{ statusText(it.status) }}</span>
             </div>
           </div>
         </div>
@@ -188,51 +223,41 @@ onMounted(() => Promise.all([loadProfile(), loadList()]))
 </template>
 
 <style scoped>
-/* ========== layout chung (full-bleed, không max-width) ========== */
+/* Layout */
 .page{
   --bg:#0b0f1a; --card:#101826; --mut:#9aa3b2; --ring:1px solid rgba(148,163,184,.14);
-  background:var(--bg); color:#e5e7eb; width:100dvw; min-height:100dvh;
+  background:var(--bg); color:#e5e7eb; min-height:100dvh;
 }
 .topbar{
   position: sticky; top: 0; z-index: 10;
   padding-block: calc(10px + env(safe-area-inset-top)) 10px;
-  /* đệm 2 bên cân, tôn trọng safe-area nếu có notch */
   padding-left: max(16px, env(safe-area-inset-left));
   padding-right: max(16px, env(safe-area-inset-right));
   display: flex; align-items: center; gap: 10px;
   background: linear-gradient(180deg, rgba(11,15,26,.96), rgba(11,15,26,.7) 65%, transparent);
   backdrop-filter: blur(8px);
 }
-
 .topbar h1{margin:0; font:800 20px/1 ui-sans-serif,system-ui}
-.back{
-  width:36px;height:36px;border-radius:50%;border:var(--ring);background:#0e1726;
-  display:grid;place-items:center;color:#cbd5e1;
-}
+.back{width:36px;height:36px;border-radius:50%;border:var(--ring);background:#0e1726;
+  display:grid;place-items:center;color:#cbd5e1;}
 .spacer{flex:1}
 .wrap{
-  width: 100%;
-  /* KHÔNG dùng max-width; chỉ padding 2 bên cân */
-  padding-top: 12px;
-  padding-bottom: calc(20px + env(safe-area-inset-bottom));
-  padding-left: max(16px, env(safe-area-inset-left));
-  padding-right: max(16px, env(safe-area-inset-right));
+  padding: 12px max(16px, env(safe-area-inset-right)) calc(20px + env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
   display: grid; gap: 14px;
 }
 
-/* ========== card dùng chung ========== */
-.card{ width: 100%; margin-inline: 0; overflow: hidden }
-.section-title{display:flex; align-items:center; gap:8px; font-weight:800; margin-bottom:10px}
+/* Cards */
+.card{background:var(--card); border:var(--ring); border-radius:14px; padding:14px}
 
-/* Hero balance */
-.hero{display:flex; gap:12px; align-items:center; padding:16px}
+/* Hero */
+.hero{display:flex; gap:12px; align-items:center}
 .hero-ic{width:44px;height:44px;border-radius:12px;display:grid;place-items:center;
   background:linear-gradient(145deg,#06b6d4,#2563eb); color:#fff}
 .hero-text .label{font-size:12px;color:var(--mut)}
 .hero-text .amount{font:800 22px/1.1 ui-sans-serif,system-ui}
 .hero-text .amount span{font:700 12px; opacity:.85; margin-left:6px}
 
-/* Groups & inputs */
+/* Form */
 .group{display:grid; gap:12px; margin-bottom:10px}
 .lbl{display:flex; align-items:center; gap:8px; font-weight:700}
 .amt-row{position:relative}
@@ -240,18 +265,11 @@ onMounted(() => Promise.all([loadProfile(), loadList()]))
   width:100%; padding:14px 74px 14px 14px; border-radius:14px; border:var(--ring);
   background:#0f172a; color:#fff; font:700 18px/1.2 ui-sans-serif,system-ui; outline:none;
 }
-.amt:focus{box-shadow:0 0 0 2px #22d3ee55 inset}
 .cur{position:absolute; right:12px; top:50%; transform:translateY(-50%); color:var(--mut); font-weight:700}
-.chip-grid{ display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 8px }
-.chip{
-  padding:10px 0; border-radius:12px; background:#0e1726; border:var(--ring);
-  color:#a3b2c7; font-weight:700;
-}
+.chip-grid{ display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px }
+.chip{ padding:10px 0; border-radius:12px; background:#0e1726; border:var(--ring); color:#a3b2c7; font-weight:700 }
 .box{background:#0c1424; border-radius:14px; padding:12px; border:var(--ring)}
-.txt{
-  width:100%; padding:12px 14px; border-radius:12px; border:var(--ring); background:#0f172a; color:#fff;
-}
-.txt:focus{box-shadow:0 0 0 2px #22d3ee55 inset}
+.txt{ width:100%; padding:12px 14px; border-radius:12px; border:var(--ring); background:#0f172a; color:#fff; }
 .up{text-transform:uppercase}
 
 /* Button */
@@ -264,12 +282,12 @@ onMounted(() => Promise.all([loadProfile(), loadList()]))
 .spin{width:16px;height:16px;border-radius:50%;border:2px solid #ffffff55;border-top-color:#fff;animation:spin 1s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
 
-/* Message */
+/* Messages */
 .note{margin-top:10px; padding:10px 12px; border-radius:10px; display:flex; gap:8px; align-items:center}
 .ok{background:#16a34a1a; border:1px solid #16a34a50; color:#22c55e}
 .err{background:#ef44441a; border:1px solid #ef444450; color:#ef4444}
 
-/* History list */
+/* History */
 .empty{padding:28px 8px; text-align:center; color:var(--mut)}
 .empty i{font-size:40px; opacity:.5}
 .list{display:grid; gap:10px}
@@ -286,8 +304,4 @@ onMounted(() => Promise.all([loadProfile(), loadList()]))
 .st-pending{background:#f59e0b1a; color:#f59e0b; border:1px solid #f59e0b55}
 .st-done{background:#10b9811a; color:#10b981; border:1px solid #10b98155}
 .st-reject{background:#ef44441a; color:#ef4444; border:1px solid #ef444455}
-:global(*), :global(*::before), :global(*::after){ box-sizing: border-box }
-:global(html, body, #app){ margin: 0; overflow-x: hidden }
-/* Responsive tweaks */
-@media (max-width:360px){ .chip-grid{grid-template-columns:repeat(2,1fr)} }
 </style>
