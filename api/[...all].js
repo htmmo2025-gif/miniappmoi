@@ -4,6 +4,7 @@
 import profile  from '../server/handlers/profile.js'
 import checkin  from '../server/handlers/checkin.js'
 import withdraw from '../server/handlers/withdraw.js'
+import invite   from '../server/handlers/invite.js'
 
 // ===== telegram verify =====
 import tgVerify from '../server/handlers/tg/verify.js'
@@ -31,6 +32,7 @@ const routes = {
   'POST /api/checkin'  : checkin,
   'GET /api/withdraw'  : withdraw,
   'POST /api/withdraw' : withdraw,
+  'GET /api/invite'    : invite,
 
   // telegram
   'GET /api/tg/verify' : tgVerify,
