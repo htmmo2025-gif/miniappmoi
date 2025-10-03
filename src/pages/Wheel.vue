@@ -4,18 +4,24 @@ import { ref, onMounted, onUnmounted, computed } from 'vue'
 import BottomNav from '../components/BottomNav.vue'
 import { LuckyWheel } from '@lucky-canvas/vue'
 
+/* ====== STATE ====== */
 const wheelRef = ref(null)
 
-const state = ref({ cooldown: 600, remaining: 0, htw_balance: 0 })
+const state = ref({
+  cooldown: 600,      // 10 phút mặc định (server có thể trả khác)
+  remaining: 0,       // giây còn lại để xem ad/quay
+  htw_balance: 0,     // số dư
+})
 const busy = ref(false)
 const loading = ref(true)
 const msg = ref('')
 const spinning = ref(false)
 const claimInProgress = ref(false)
+const pendingToast = ref('') // sẽ hiển thị khi vòng quay dừng
 
 let timerId = null
 
-/* ====== Adsgram Reward ====== */
+/* ====== ADSGRAM REWARD ====== */
 const REWARD_SDK_URL = 'https://sad.adsgram.ai/js/sad.min.js'
 const rewardBlockId = String(import.meta.env.VITE_ADSGRAM_WHEEL_REWARD_BLOCK_ID || '')
 const loadingRewardSdk = ref(false)
@@ -32,21 +38,23 @@ function loadRewardSdk () {
     document.head.appendChild(s)
   })
 }
+
+// “Giống mining”: luôn buộc xem Reward trước khi quay
 async function showRewardAd () {
   if (!rewardBlockId) throw new Error('Thiếu VITE_ADSGRAM_WHEEL_REWARD_BLOCK_ID')
   await loadRewardSdk()
-  const ctrl = window.Adsgram?.init?.({ blockId: rewardBlockId })
+  const ctrl = window.Adsgram?.init?.({ blockId: String(rewardBlockId) })
   if (!ctrl) throw new Error('Không khởi tạo được Adsgram Reward')
   await ctrl.show() // resolve khi người dùng đã xem xong
 }
 
-/* ====== Wheel UI ====== */
+/* ====== WHEEL UI ====== */
 const blocks = [{ padding: '12px', background: '#0f172a' }]
 const prizes = [
-  { background: '#0ea5e9', fonts: [{ text: '+1 HTW',  top: '18px' }] },
-  { background: '#f59e0b', fonts: [{ text: '+2 HTW',  top: '18px' }] },
-  { background: '#10b981', fonts: [{ text: 'Hụt 😅',  top: '18px' }] },
-  { background: '#8b5cf6', fonts: [{ text: '+5 HTW',  top: '18px' }] },
+  { background: '#0ea5e9', fonts: [{ text: '+2 HTW',  top: '18px' }] },
+  { background: '#f59e0b', fonts: [{ text: '+4 HTW',  top: '18px' }] },
+  { background: '#10b981', fonts: [{ text: '+6 HTW',  top: '18px' }] },
+  { background: '#8b5cf6', fonts: [{ text: '+8 HTW',  top: '18px' }] },
   { background: '#ef4444', fonts: [{ text: 'Hụt 😅',  top: '18px' }] },
   { background: '#22c55e', fonts: [{ text: '+10 HTW', top: '18px' }] },
 ]
@@ -62,13 +70,16 @@ async function loadStatus () {
     const r = await fetch('/api/wheel', { credentials: 'include' })
     if (!r.ok) throw new Error(await r.text())
     const data = await r.json()
-    state.value.cooldown   = Number(data.cooldown ?? state.value.cooldown)
-    state.value.remaining  = Number(data.remaining ?? 0)
+    state.value.cooldown    = Number(data.cooldown ?? state.value.cooldown)
+    state.value.remaining   = Number(data.remaining ?? 0)
     state.value.htw_balance = Number(data.htw_balance ?? 0)
     if (state.value.remaining > 0) startTicker()
   } catch (e) {
-    console.error(e); msg.value = 'Không tải được trạng thái vòng quay.'
-  } finally { loading.value = false }
+    console.error(e)
+    msg.value = 'Không tải được trạng thái vòng quay.'
+  } finally {
+    loading.value = false
+  }
 }
 
 /* ====== AUTO-SPIN SAU KHI XEM AD (không dùng vé) ====== */
@@ -79,6 +90,7 @@ async function spin () {
   claimInProgress.value = true
   busy.value = true
   msg.value = ''
+  pendingToast.value = ''
 
   try {
     // 1) Buộc xem quảng cáo trước
@@ -99,7 +111,6 @@ async function spin () {
     if (!server?.ok || server.data?.ok !== true) {
       // thất bại/cooldown: dừng quay và hiển thị thông báo
       wheelRef.value?.stop?.(0) // dừng lại (UI), không cộng thưởng
-      spinning.value = false
       const remain = Number(server?.data?.remaining ?? state.value.cooldown)
       state.value.remaining = remain
       startTicker()
@@ -115,31 +126,61 @@ async function spin () {
     state.value.remaining   = Number(server.data.remaining ?? state.value.cooldown)
     startTicker()
 
+    // chuẩn bị thông điệp để hiển thị KHI vòng quay dừng (@end)
     const add = Number(server.data.add ?? 0)
-    if (add > 0) toast(`+${add} HTW`)
+    pendingToast.value = add > 0 ? `+${add} HTW 🎉` : 'Hụt rồi, hẹn lần sau!'
   } catch (e) {
     console.error(e)
     spinning.value = false
     msg.value = e?.message || 'Quay thất bại, thử lại sau.'
   } finally {
     busy.value = false
+    // mở khóa tránh spam
     setTimeout(() => { claimInProgress.value = false }, 1200)
   }
+}
+
+/* ====== xử lý khi vòng quay dừng ====== */
+function onEnd (prize) {
+  spinning.value = false
+
+  if (pendingToast.value) {
+    toast(pendingToast.value)
+    try {
+      const type = pendingToast.value.includes('+') ? 'success' : 'warning'
+      window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred(type)
+    } catch {}
+    pendingToast.value = ''
+    return
+  }
+
+  // fallback nếu không có pendingToast
+  const t = prize?.fonts?.[0]?.text || ''
+  toast(t.includes('HTW') ? `Nhận ${t} 🎉` : 'Hụt rồi, hẹn lần sau!')
 }
 
 /* ====== countdown giống mining ====== */
 function startTicker () {
   stopTicker()
   timerId = setInterval(() => {
-    if (state.value.remaining > 0) state.value.remaining--
-    else stopTicker()
+    if (state.value.remaining > 0) {
+      state.value.remaining--
+    } else {
+      stopTicker()
+    }
   }, 1000)
 }
-function stopTicker () { if (timerId) { clearInterval(timerId); timerId = null } }
+function stopTicker () {
+  if (timerId) { clearInterval(timerId); timerId = null }
+}
 const canSpin = computed(() =>
   !busy.value && !spinning.value && !claimInProgress.value && state.value.remaining <= 0 && !loading.value
 )
-function fmtTime (sec) { const m = String(Math.floor(sec/60)).padStart(2,'0'); const s = String(Math.floor(sec%60)).padStart(2,'0'); return `${m}:${s}` }
+function fmtTime (sec) {
+  const m = String(Math.floor(sec / 60)).padStart(2, '0')
+  const s = String(Math.floor(sec % 60)).padStart(2, '0')
+  return `${m}:${s}`
+}
 
 /* ====== toast ====== */
 function toast (t) {
@@ -151,6 +192,7 @@ function toast (t) {
   setTimeout(() => { el.classList.remove('show'); setTimeout(() => el.remove(), 250) }, 1600)
 }
 
+/* ====== LIFECYCLE ====== */
 onMounted(loadStatus)
 onUnmounted(stopTicker)
 </script>
@@ -160,6 +202,14 @@ onUnmounted(stopTicker)
     <header class="topbar"><h1>Vòng quay may mắn</h1></header>
 
     <main class="wrap">
+      <!-- Số dư -->
+      <section class="card hero">
+        <div class="hero-ic"><i class="bi bi-bullseye"></i></div>
+        <div class="hero-t">
+          <div class="label">Số dư HTW</div>
+          <div class="amount">{{ state.htw_balance.toLocaleString() }} <span>HTW</span></div>
+        </div>
+      </section>
 
       <section class="card wheel">
         <LuckyWheel
@@ -169,6 +219,7 @@ onUnmounted(stopTicker)
           :blocks="blocks"
           :prizes="prizes"
           :buttons="buttons"
+          @end="onEnd"
         />
 
         <div class="cooldown" v-if="state.remaining > 0">
@@ -215,19 +266,30 @@ onUnmounted(stopTicker)
 }
 .topbar h1{margin:0; font:800 20px/1 ui-sans-serif,system-ui}
 .wrap{padding:16px 16px calc(92px + env(safe-area-inset-bottom))}
-.card{background:var(--card); border:var(--ring); border-radius:16px; padding:18px; box-shadow:0 10px 30px rgba(2,8,23,.35)}
+
+.card{
+  background:var(--card); border:var(--ring); border-radius:16px; padding:18px;
+  box-shadow:0 10px 30px rgba(2,8,23,.35)
+}
 .card.center{display:grid;place-items:center;gap:10px;padding:28px}
 .big{font-size:38px}
 
+/* hero */
 .hero{display:flex; gap:12px; align-items:center}
-.hero-ic{width:44px;height:44px;border-radius:12px;background:linear-gradient(145deg,#06b6d4,#2563eb);display:grid;place-items:center}
+.hero-ic{
+  width:44px;height:44px;border-radius:12px;
+  background:linear-gradient(145deg,#06b6d4,#2563eb);
+  display:grid;place-items:center
+}
 .hero-t .label{font-size:12px;color:var(--mut)}
 .hero-t .amount{font:800 22px/1.1 ui-sans-serif,system-ui}
 .hero-t .amount span{font:700 12px; opacity:.85; margin-left:6px}
 
+/* wheel */
 .wheel{display:grid;place-items:center;gap:12px}
 .cooldown{display:flex;align-items:center;gap:8px;color:#9fb2d0;margin:6px 0 2px}
 
+/* button */
 .btn{
   width:100%; padding:14px; border-radius:14px; border:none; color:#0b0f1a; font-weight:900;
   background:linear-gradient(145deg,#fde68a,#60a5fa);
