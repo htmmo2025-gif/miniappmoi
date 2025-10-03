@@ -6,6 +6,7 @@ import checkin  from '../server/handlers/checkin.js'
 import withdraw from '../server/handlers/withdraw.js'
 import invite   from '../server/handlers/invite.js'
 
+
 // ===== telegram verify =====
 import tgVerify from '../server/handlers/tg/verify.js'
 
@@ -43,6 +44,7 @@ const routes = {
   'POST /api/tasks/adsgram-reward'   : taskAdsgramReward,
 
   // game
+  'GET /api/mine'       : mine,
   'POST /api/mine'       : mine,
   'POST /api/swap'       : swap,
   'POST /api/wheel/spin' : wheelSpin,
