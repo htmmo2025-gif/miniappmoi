@@ -19,7 +19,7 @@ import taskAdsgramReward from '../server/handlers/tasks/adsgram-reward.js'
 import mine      from '../server/handlers/mine.js'
 import swap      from '../server/handlers/swap.js'
 // ===== wheel =====
-import wheelStatus from '../server/handlers/wheel/status.js'
+import wheelStatus from '../server/handlers/wheel.js'
 import wheelSpin   from '../server/handlers/wheel/spin.js'
 
 // ===== admin =====
