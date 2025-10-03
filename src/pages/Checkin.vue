@@ -157,7 +157,7 @@ onMounted(async () => {
         </button>
 
         <p v-if="msg" class="msg">{{ msg }}</p>
-        <p v-else-if="!ready" class="hint">Monetag SDK chưa sẵn sàng.</p>
+        <p v-else-if="!ready" class="hint">Đang loading...</p>
       </section>
     </main>
 
