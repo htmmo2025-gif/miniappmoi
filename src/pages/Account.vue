@@ -31,7 +31,8 @@ const initials = computed(() => {
 
 function goWithdraw() { router.push({ name: 'withdraw' }) }
 function goSwap()     { router.push({ name: 'swap' }) }
-function goWheel()    { router.push({ name: 'wheel' }) } // <— Nút vòng quay
+function goWheel()    { router.push({ name: 'wheel' }) }
+function goCheckin()  { router.push({ name: 'checkin' }) }
 function openSupport() {
   const url = 'https://t.me/your_support_channel'
   if (window.Telegram?.WebApp?.openTelegramLink) {
@@ -113,6 +114,16 @@ onMounted(loadProfile)
             <i class="bi bi-chevron-right chev"></i>
           </button>
 
+          <!-- ⭐ Điểm danh -->
+          <button class="item" @click="goCheckin">
+             <span class="ic ic-checkin"><i class="bi bi-calendar-check"></i></span>
+             <div class="meta">
+                <div class="title">Điểm danh</div>
+                <div class="sub">Nhận thưởng mỗi ngày</div>
+             </div>
+             <i class="bi bi-chevron-right chev"></i>
+          </button>
+
           <button class="item" @click="goWithdraw">
             <span class="ic ic-withdraw"><i class="bi bi-credit-card-2-front"></i></span>
             <div class="meta">
@@ -185,7 +196,8 @@ onMounted(loadProfile)
 .ic-support{background:linear-gradient(145deg,#0ea5e9,#2563eb)}
 .ic-withdraw{background:linear-gradient(145deg,#059669,#10b981)}
 .ic-swap{background:linear-gradient(145deg,#7c3aed,#8b5cf6)}
-.ic-wheel{background:linear-gradient(145deg,#f97316,#ef4444)} /* nút vòng quay */
+.ic-wheel{background:linear-gradient(145deg,#f97316,#ef4444)}
+.ic-checkin{background:linear-gradient(145deg,#22c55e,#16a34a)}
 .meta .title{font-weight:700;font-size:14px}
 .meta .sub{font-size:12px;color:var(--muted);margin-top:2px}
 .chev{color:var(--muted)}

@@ -8,6 +8,7 @@ import ErrorPage from './pages/Error.vue'
 import Swap from './pages/Swap.vue'
 import Withdraw from './pages/Withdraw.vue'
 import Wheel from './pages/Wheel.vue'
+import Checkin from './pages/Checkin.vue'
 
 export default createRouter({
   history: createWebHistory(),
@@ -20,6 +21,7 @@ export default createRouter({
     { path: '/swap', name: 'swap', component: Swap },
     { path: '/withdraw', name: 'withdraw', component: Withdraw },
     { path: '/wheel', name: 'wheel', component: Wheel },
+    { path: '/checkin', name: 'checkin', component: Checkin },
     { path: '/error', component: ErrorPage },
   ],
 })
