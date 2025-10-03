@@ -52,11 +52,15 @@ const routes = {
 }
 
 // ===== utils =====
-function setCors(res) {
-  res.setHeader('Access-Control-Allow-Origin', '*')
-  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS,HEAD')
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Telegram-Id')
-}
+function setCors(req, res) {
+    const origin = req.headers.origin || '*'
+    res.setHeader('Access-Control-Allow-Origin', origin)
+    res.setHeader('Vary', 'Origin')
+    res.setHeader('Access-Control-Allow-Credentials', 'true')
+    res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS,HEAD')
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Telegram-Id')
+  }
+  
 function sendJSON(res, code, data) {
   res.statusCode = code
   res.setHeader('content-type', 'application/json; charset=utf-8')
