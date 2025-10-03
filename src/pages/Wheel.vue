@@ -4,23 +4,18 @@ import { ref, onMounted, onUnmounted, computed } from 'vue'
 import BottomNav from '../components/BottomNav.vue'
 import { LuckyWheel } from '@lucky-canvas/vue'
 
-/* ====== STATE ====== */
 const wheelRef = ref(null)
 
-const state = ref({
-  cooldown: 600,      // 10 phút mặc định (server có thể trả khác)
-  remaining: 0,       // giây còn lại để xem ad/quay
-  htw_balance: 0,     // số dư
-})
+const state = ref({ cooldown: 600, remaining: 0, htw_balance: 0 })
 const busy = ref(false)
 const loading = ref(true)
 const msg = ref('')
 const spinning = ref(false)
-const claimInProgress = ref(false) // chặn double click
+const claimInProgress = ref(false)
 
 let timerId = null
 
-/* ====== ADSGRAM REWARD ====== */
+/* ====== Adsgram Reward ====== */
 const REWARD_SDK_URL = 'https://sad.adsgram.ai/js/sad.min.js'
 const rewardBlockId = String(import.meta.env.VITE_ADSGRAM_WHEEL_REWARD_BLOCK_ID || '')
 const loadingRewardSdk = ref(false)
@@ -37,17 +32,15 @@ function loadRewardSdk () {
     document.head.appendChild(s)
   })
 }
-
-// “Giống mining”: luôn buộc xem Reward trước khi quay
 async function showRewardAd () {
-  if (!rewardBlockId) throw new Error('Thiếu VITE_ADSGRAM_REWARD_BLOCK_ID')
+  if (!rewardBlockId) throw new Error('Thiếu VITE_ADSGRAM_WHEEL_REWARD_BLOCK_ID')
   await loadRewardSdk()
-  const ctrl = window.Adsgram?.init?.({ blockId: String(rewardBlockId) })
+  const ctrl = window.Adsgram?.init?.({ blockId: rewardBlockId })
   if (!ctrl) throw new Error('Không khởi tạo được Adsgram Reward')
-  await ctrl.show()
+  await ctrl.show() // resolve khi người dùng đã xem xong
 }
 
-/* ====== WHEEL UI ====== */
+/* ====== Wheel UI ====== */
 const blocks = [{ padding: '12px', background: '#0f172a' }]
 const prizes = [
   { background: '#0ea5e9', fonts: [{ text: '+1 HTW',  top: '18px' }] },
@@ -61,7 +54,7 @@ const buttons = [
   { radius: '40px', background: '#2563eb', pointer: true, fonts: [{ text: 'SPIN', top: '-18px' }] }
 ]
 
-/* ====== GET/POST API ====== */
+/* ====== API ====== */
 async function loadStatus () {
   loading.value = true
   msg.value = ''
@@ -74,14 +67,13 @@ async function loadStatus () {
     state.value.htw_balance = Number(data.htw_balance ?? 0)
     if (state.value.remaining > 0) startTicker()
   } catch (e) {
-    console.error(e)
-    msg.value = 'Không tải được trạng thái vòng quay.'
-  } finally {
-    loading.value = false
-  }
+    console.error(e); msg.value = 'Không tải được trạng thái vòng quay.'
+  } finally { loading.value = false }
 }
 
-// Bắt đầu quay (workflow: Xem ad -> POST /api/wheel/spin -> spin theo index server trả)
+/* ====== AUTO-SPIN SAU KHI XEM AD (không dùng vé) ====== */
+const MIN_SPIN_MS = 1000
+
 async function spin () {
   if (!canSpin.value || claimInProgress.value) return
   claimInProgress.value = true
@@ -89,69 +81,67 @@ async function spin () {
   msg.value = ''
 
   try {
-    // 1) BẮT BUỘC xem Reward trước
-    await showRewardAd().catch(e => { throw new Error(e?.message || 'Vui lòng xem quảng cáo để quay.') })
+    // 1) Buộc xem quảng cáo trước
+    await showRewardAd()
 
-    // 2) Gọi server để quyết định ô dừng + cộng HTW
-    const r = await fetch('/api/wheel/spin', { method: 'POST', credentials: 'include' })
-    const data = await r.json().catch(() => ({}))
+    // 2) Bắt đầu quay ngay để mượt
+    spinning.value = true
+    wheelRef.value?.play?.()
 
-    // Server báo chưa hết cooldown
-    if (!r.ok || data?.ok !== true) {
-      const remain = Number(data?.remaining ?? state.value.cooldown)
+    // 3) Song song gọi server quyết định kết quả + cộng HTW
+    const [_, server] = await Promise.all([
+      new Promise(res => setTimeout(res, MIN_SPIN_MS)), // đảm bảo quay tối thiểu
+      fetch('/api/wheel/spin', { method: 'POST', credentials: 'include' })
+        .then(async r => ({ ok: r.ok, data: await r.json().catch(()=>({})) }))
+        .catch(() => ({ ok: false, data: null }))
+    ])
+
+    if (!server?.ok || server.data?.ok !== true) {
+      // thất bại/cooldown: dừng quay và hiển thị thông báo
+      wheelRef.value?.stop?.(0) // dừng lại (UI), không cộng thưởng
+      spinning.value = false
+      const remain = Number(server?.data?.remaining ?? state.value.cooldown)
       state.value.remaining = remain
       startTicker()
-      msg.value = data?.ok === false ? 'Chưa hết thời gian chờ.' : 'Quay thất bại.'
+      msg.value = server?.data?.ok === false ? 'Chưa hết thời gian chờ.' : 'Quay thất bại.'
       return
     }
 
-    // 3) Quay & dừng theo index do server trả về (bảo đảm công bằng)
-    const idx = Number(data.index ?? 0) % prizes.length
-    spinning.value = true
-    wheelRef.value?.play?.()
-    setTimeout(() => { wheelRef.value?.stop?.(idx) }, 1000)
+    const idx = Number(server.data.index ?? 0) % prizes.length
+    wheelRef.value?.stop?.(idx) // dừng đúng ô server trả
 
-    // 4) Cập nhật số dư & cooldown từ server (nếu server trả)
-    state.value.htw_balance = Number(data.htw_balance ?? state.value.htw_balance)
-    state.value.remaining   = Number(data.remaining ?? state.value.cooldown)
+    // cập nhật số dư + cooldown (nếu có)
+    state.value.htw_balance = Number(server.data.htw_balance ?? state.value.htw_balance)
+    state.value.remaining   = Number(server.data.remaining ?? state.value.cooldown)
     startTicker()
 
-    // Hiển thị +HTW nếu server có `add`
-    const add = Number(data.add ?? 0)
+    const add = Number(server.data.add ?? 0)
     if (add > 0) toast(`+${add} HTW`)
   } catch (e) {
     console.error(e)
+    spinning.value = false
     msg.value = e?.message || 'Quay thất bại, thử lại sau.'
   } finally {
     busy.value = false
-    setTimeout(() => { claimInProgress.value = false }, 1500)
+    setTimeout(() => { claimInProgress.value = false }, 1200)
   }
 }
 
-/* ====== COUNTDOWN giống mining ====== */
+/* ====== countdown giống mining ====== */
 function startTicker () {
   stopTicker()
   timerId = setInterval(() => {
-    if (state.value.remaining > 0) {
-      state.value.remaining--
-    } else {
-      stopTicker()
-    }
+    if (state.value.remaining > 0) state.value.remaining--
+    else stopTicker()
   }, 1000)
 }
-function stopTicker () {
-  if (timerId) { clearInterval(timerId); timerId = null }
-}
+function stopTicker () { if (timerId) { clearInterval(timerId); timerId = null } }
 const canSpin = computed(() =>
   !busy.value && !spinning.value && !claimInProgress.value && state.value.remaining <= 0 && !loading.value
 )
-function fmtTime (sec) {
-  const m = Math.floor(sec / 60).toString().padStart(2, '0')
-  const s = Math.floor(sec % 60).toString().padStart(2, '0')
-  return `${m}:${s}`
-}
+function fmtTime (sec) { const m = String(Math.floor(sec/60)).padStart(2,'0'); const s = String(Math.floor(sec%60)).padStart(2,'0'); return `${m}:${s}` }
 
-/* ====== TOAST ====== */
+/* ====== toast ====== */
 function toast (t) {
   const el = document.createElement('div')
   el.className = 'toast'
@@ -161,7 +151,6 @@ function toast (t) {
   setTimeout(() => { el.classList.remove('show'); setTimeout(() => el.remove(), 250) }, 1600)
 }
 
-/* ====== LIFECYCLE ====== */
 onMounted(loadStatus)
 onUnmounted(stopTicker)
 </script>
@@ -206,7 +195,7 @@ onUnmounted(stopTicker)
         </button>
 
         <p v-if="!rewardBlockId" class="note warn">
-          ⚠️ Thiếu <b>VITE_ADSGRAM_REWARD_BLOCK_ID</b> nên không thể hiển thị quảng cáo Reward.
+          ⚠️ Thiếu <b>VITE_ADSGRAM_WHEEL_REWARD_BLOCK_ID</b> nên không thể hiển thị quảng cáo Reward.
         </p>
         <p v-if="msg" class="note">{{ msg }}</p>
       </section>
