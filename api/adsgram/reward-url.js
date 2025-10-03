@@ -1,7 +1,7 @@
 // /api/adsgram/reward-url.js
 import { supa } from '../_supa.js'
 
-const SECRET   = process.env.ADSGRAM_REWARD_SECRET
+const SECRET   = process.env.ADSGRAM_WHEEL_REWARD_SECRET
 const COOLDOWN = Number(process.env.ADSGRAM_WHEEL_REWARD_COOLDOWN || 600)
 
 export default async function handler (req, res) {

@@ -1,33 +1,31 @@
+<!-- src/pages/Wheel.vue -->
 <script setup>
 import { ref, onMounted, onUnmounted, computed } from 'vue'
 import BottomNav from '../components/BottomNav.vue'
+import { LuckyWheel } from '@lucky-canvas/vue'
+
+/* ====== STATE ====== */
+const wheelRef = ref(null)
 
 const state = ref({
-  reward: 20,
-  cooldown: 1800,
-  remaining: 0,
-  htw_balance: 0,
+  cooldown: 600,      // 10 phút mặc định (server có thể trả khác)
+  remaining: 0,       // giây còn lại để xem ad/quay
+  htw_balance: 0,     // số dư
 })
-
 const busy = ref(false)
 const loading = ref(true)
 const msg = ref('')
-const claimInProgress = ref(false) // Ngăn double-click
+const spinning = ref(false)
+const claimInProgress = ref(false) // chặn double click
 
 let timerId = null
-const canClaim = computed(() => 
-  !busy.value && 
-  !claimInProgress.value && 
-  state.value.remaining <= 0 && 
-  !loading.value
-)
 
-/* ========= Reward Ad (Adsgram) ========= */
-const rewardBlockId = String(import.meta.env.VITE_ADSGRAM_REWARD_BLOCK_ID || '')
+/* ====== ADSGRAM REWARD ====== */
 const REWARD_SDK_URL = 'https://sad.adsgram.ai/js/sad.min.js'
+const rewardBlockId = String(import.meta.env.VITE_ADSGRAM_WHEEL_REWARD_BLOCK_ID || '')
 const loadingRewardSdk = ref(false)
 
-function loadRewardSdk() {
+function loadRewardSdk () {
   if ([...document.scripts].some(s => s.src === REWARD_SDK_URL)) return Promise.resolve()
   loadingRewardSdk.value = true
   return new Promise((resolve, reject) => {
@@ -40,7 +38,8 @@ function loadRewardSdk() {
   })
 }
 
-async function showRewardAd() {
+// “Giống mining”: luôn buộc xem Reward trước khi quay
+async function showRewardAd () {
   if (!rewardBlockId) throw new Error('Thiếu VITE_ADSGRAM_REWARD_BLOCK_ID')
   await loadRewardSdk()
   const ctrl = window.Adsgram?.init?.({ blockId: String(rewardBlockId) })
@@ -48,8 +47,89 @@ async function showRewardAd() {
   await ctrl.show()
 }
 
-/* ============ Mining logic ============ */
-function startTicker() {
+/* ====== WHEEL UI ====== */
+const blocks = [{ padding: '12px', background: '#0f172a' }]
+const prizes = [
+  { background: '#0ea5e9', fonts: [{ text: '+1 HTW',  top: '18px' }] },
+  { background: '#f59e0b', fonts: [{ text: '+2 HTW',  top: '18px' }] },
+  { background: '#10b981', fonts: [{ text: 'Hụt 😅',  top: '18px' }] },
+  { background: '#8b5cf6', fonts: [{ text: '+5 HTW',  top: '18px' }] },
+  { background: '#ef4444', fonts: [{ text: 'Hụt 😅',  top: '18px' }] },
+  { background: '#22c55e', fonts: [{ text: '+10 HTW', top: '18px' }] },
+]
+const buttons = [
+  { radius: '40px', background: '#2563eb', pointer: true, fonts: [{ text: 'SPIN', top: '-18px' }] }
+]
+
+/* ====== GET/POST API ====== */
+async function loadStatus () {
+  loading.value = true
+  msg.value = ''
+  try {
+    const r = await fetch('/api/wheel', { credentials: 'include' })
+    if (!r.ok) throw new Error(await r.text())
+    const data = await r.json()
+    state.value.cooldown   = Number(data.cooldown ?? state.value.cooldown)
+    state.value.remaining  = Number(data.remaining ?? 0)
+    state.value.htw_balance = Number(data.htw_balance ?? 0)
+    if (state.value.remaining > 0) startTicker()
+  } catch (e) {
+    console.error(e)
+    msg.value = 'Không tải được trạng thái vòng quay.'
+  } finally {
+    loading.value = false
+  }
+}
+
+// Bắt đầu quay (workflow: Xem ad -> POST /api/wheel/spin -> spin theo index server trả)
+async function spin () {
+  if (!canSpin.value || claimInProgress.value) return
+  claimInProgress.value = true
+  busy.value = true
+  msg.value = ''
+
+  try {
+    // 1) BẮT BUỘC xem Reward trước
+    await showRewardAd().catch(e => { throw new Error(e?.message || 'Vui lòng xem quảng cáo để quay.') })
+
+    // 2) Gọi server để quyết định ô dừng + cộng HTW
+    const r = await fetch('/api/wheel/spin', { method: 'POST', credentials: 'include' })
+    const data = await r.json().catch(() => ({}))
+
+    // Server báo chưa hết cooldown
+    if (!r.ok || data?.ok !== true) {
+      const remain = Number(data?.remaining ?? state.value.cooldown)
+      state.value.remaining = remain
+      startTicker()
+      msg.value = data?.ok === false ? 'Chưa hết thời gian chờ.' : 'Quay thất bại.'
+      return
+    }
+
+    // 3) Quay & dừng theo index do server trả về (bảo đảm công bằng)
+    const idx = Number(data.index ?? 0) % prizes.length
+    spinning.value = true
+    wheelRef.value?.play?.()
+    setTimeout(() => { wheelRef.value?.stop?.(idx) }, 1000)
+
+    // 4) Cập nhật số dư & cooldown từ server (nếu server trả)
+    state.value.htw_balance = Number(data.htw_balance ?? state.value.htw_balance)
+    state.value.remaining   = Number(data.remaining ?? state.value.cooldown)
+    startTicker()
+
+    // Hiển thị +HTW nếu server có `add`
+    const add = Number(data.add ?? 0)
+    if (add > 0) toast(`+${add} HTW`)
+  } catch (e) {
+    console.error(e)
+    msg.value = e?.message || 'Quay thất bại, thử lại sau.'
+  } finally {
+    busy.value = false
+    setTimeout(() => { claimInProgress.value = false }, 1500)
+  }
+}
+
+/* ====== COUNTDOWN giống mining ====== */
+function startTicker () {
   stopTicker()
   timerId = setInterval(() => {
     if (state.value.remaining > 0) {
@@ -59,125 +139,56 @@ function startTicker() {
     }
   }, 1000)
 }
-
-function stopTicker() {
-  if (timerId) {
-    clearInterval(timerId)
-    timerId = null
-  }
+function stopTicker () {
+  if (timerId) { clearInterval(timerId); timerId = null }
 }
-
-async function loadStatus() {
-  loading.value = true
-  msg.value = ''
-  try {
-    const r = await fetch('/api/mine', { credentials: 'include' })
-    if (!r.ok) throw new Error(await r.text())
-    const data = await r.json()
-    state.value = {
-      reward: data.reward,
-      cooldown: data.cooldown,
-      remaining: data.remaining,
-      htw_balance: Number(data.htw_balance ?? 0),
-    }
-    if (data.remaining > 0) {
-      startTicker()
-    }
-  } catch (e) {
-    console.error(e)
-    msg.value = 'Không tải được trạng thái mining.'
-  } finally {
-    loading.value = false
-  }
-}
-
-async function claim() {
-  if (!canClaim.value || claimInProgress.value) return
-  
-  claimInProgress.value = true
-  busy.value = true
-  msg.value = ''
-  
-  try {
-    // 1) Bắt buộc xem Reward ad trước
-    await showRewardAd().catch((e) => {
-      throw new Error(e?.message || 'Vui lòng xem quảng cáo để claim.')
-    })
-
-    // 2) Sau khi xem xong mới gọi API claim
-    const r = await fetch('/api/mine', { 
-      method: 'POST', 
-      credentials: 'include' 
-    })
-    
-    const data = await r.json().catch(() => ({}))
-    
-    if (!r.ok || data?.ok !== true) {
-      // Backend từ chối - set lại cooldown
-      const remain = Number(data?.remaining ?? state.value.cooldown)
-      state.value.remaining = remain
-      startTicker()
-      msg.value = data?.ok === false 
-        ? 'Chưa hết thời gian chờ.' 
-        : 'Claim thất bại.'
-      return
-    }
-    
-    // Claim thành công
-    state.value.htw_balance = Number(data.htw_balance ?? state.value.htw_balance)
-    state.value.remaining = state.value.cooldown
-    msg.value = `Nhận +${state.value.reward} HTW thành công!`
-    startTicker()
-    
-  } catch (e) {
-    console.error(e)
-    msg.value = e?.message || 'Claim thất bại, thử lại sau.'
-  } finally {
-    busy.value = false
-    // Delay 2s trước khi cho phép claim lại (tránh spam)
-    setTimeout(() => {
-      claimInProgress.value = false
-    }, 2000)
-  }
-}
-
-function fmtTime(sec) {
+const canSpin = computed(() =>
+  !busy.value && !spinning.value && !claimInProgress.value && state.value.remaining <= 0 && !loading.value
+)
+function fmtTime (sec) {
   const m = Math.floor(sec / 60).toString().padStart(2, '0')
   const s = Math.floor(sec % 60).toString().padStart(2, '0')
   return `${m}:${s}`
 }
 
+/* ====== TOAST ====== */
+function toast (t) {
+  const el = document.createElement('div')
+  el.className = 'toast'
+  el.textContent = t
+  document.body.appendChild(el)
+  requestAnimationFrame(() => el.classList.add('show'))
+  setTimeout(() => { el.classList.remove('show'); setTimeout(() => el.remove(), 250) }, 1600)
+}
+
+/* ====== LIFECYCLE ====== */
 onMounted(loadStatus)
 onUnmounted(stopTicker)
 </script>
 
 <template>
   <div class="page">
-    <header class="topbar">
-      <h1>Mining</h1>
-      <span class="spacer"></span>
-    </header>
+    <header class="topbar"><h1>Vòng quay may mắn</h1></header>
 
     <main class="wrap">
+      <!-- Số dư -->
       <section class="card hero">
-        <div class="hero-ic"><i class="bi bi-lightning-charge"></i></div>
+        <div class="hero-ic"><i class="bi bi-bullseye"></i></div>
         <div class="hero-t">
           <div class="label">Số dư HTW</div>
           <div class="amount">{{ state.htw_balance.toLocaleString() }} <span>HTW</span></div>
         </div>
       </section>
 
-      <section class="card">
-        <div class="row">
-          <div class="box">
-            <div class="box-lbl"><i class="bi bi-gem"></i> Phần thưởng</div>
-            <div class="box-val">+{{ state.reward }} HTW</div>
-          </div>
-          <div class="box">
-            <div class="box-lbl"><i class="bi bi-clock-history"></i> Chu kỳ</div>
-            <div class="box-val">30 phút</div>
-          </div>
-        </div>
+      <section class="card wheel">
+        <LuckyWheel
+          ref="wheelRef"
+          :width="320"
+          :height="320"
+          :blocks="blocks"
+          :prizes="prizes"
+          :buttons="buttons"
+        />
 
         <div class="cooldown" v-if="state.remaining > 0">
           <i class="bi bi-hourglass-split"></i>
@@ -186,20 +197,18 @@ onUnmounted(stopTicker)
 
         <button
           class="btn"
-          :disabled="!canClaim || loading || loadingRewardSdk"
-          @click="claim"
+          :disabled="!canSpin || loading || loadingRewardSdk"
+          @click="spin"
         >
           <i v-if="busy || loading || loadingRewardSdk" class="bi bi-arrow-repeat spin"></i>
-          <i v-else class="bi bi-box-arrow-in-down"></i>
-          <span>
-            {{ state.remaining > 0 ? 'Chưa thể claim' : 'Claim +' + state.reward + ' HTW' }}
-          </span>
+          <i v-else class="bi bi-play-circle"></i>
+          <span>{{ state.remaining > 0 ? 'Chưa thể quay' : 'Quay ngay' }}</span>
         </button>
 
         <p v-if="!rewardBlockId" class="note warn">
           ⚠️ Thiếu <b>VITE_ADSGRAM_REWARD_BLOCK_ID</b> nên không thể hiển thị quảng cáo Reward.
         </p>
-        <p v-if="msg" class="note" :class="{ success: msg.includes('thành công') }">{{ msg }}</p>
+        <p v-if="msg" class="note">{{ msg }}</p>
       </section>
 
       <section v-if="loading" class="card center">
@@ -207,41 +216,25 @@ onUnmounted(stopTicker)
         <div>Đang tải…</div>
       </section>
     </main>
+
+    <BottomNav />
   </div>
-  <BottomNav />
 </template>
 
 <style scoped>
 .page{
   --bg:#0b0f1a; --card:#101826; --mut:#9aa3b2; --ring:1px solid rgba(148,163,184,.14);
-  background:var(--bg); color:#e5e7eb; width:100dvw; min-height:100dvh;
+  background:var(--bg); color:#e5e7eb; min-height:100dvh;
 }
 .topbar{
   position: sticky; top: 0; z-index: 10;
-  padding-block: calc(10px + env(safe-area-inset-top)) 10px;
-  padding-left: max(16px, env(safe-area-inset-left));
-  padding-right: max(16px, env(safe-area-inset-right));
-  display: flex; align-items: center; gap: 10px;
+  padding: 14px 16px;
   background: linear-gradient(180deg, rgba(11,15,26,.96), rgba(11,15,26,.7) 65%, transparent);
   backdrop-filter: blur(8px);
 }
 .topbar h1{margin:0; font:800 20px/1 ui-sans-serif,system-ui}
-.spacer{flex:1}
-
-.wrap{
-  width:100%;
-  padding-top:12px;
-  padding-bottom:calc(20px + env(safe-area-inset-bottom));
-  padding-left:max(16px, env(safe-area-inset-left));
-  padding-right:max(16px, env(safe-area-inset-right));
-  display:grid; gap:14px;
-}
-
-.card{
-  width:100%; margin-inline:0; overflow:hidden;
-  background:#0f172a; border:var(--ring); border-radius:14px; padding:16px;
-  box-shadow:0 10px 30px rgba(2,8,23,.35);
-}
+.wrap{padding:16px 16px calc(92px + env(safe-area-inset-bottom))}
+.card{background:var(--card); border:var(--ring); border-radius:16px; padding:18px; box-shadow:0 10px 30px rgba(2,8,23,.35)}
 .card.center{display:grid;place-items:center;gap:10px;padding:28px}
 .big{font-size:38px}
 
@@ -251,31 +244,34 @@ onUnmounted(stopTicker)
 .hero-t .amount{font:800 22px/1.1 ui-sans-serif,system-ui}
 .hero-t .amount span{font:700 12px; opacity:.85; margin-left:6px}
 
-.row{display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:8px}
-.box{background:#0e1525;border:var(--ring);border-radius:12px;padding:12px}
-.box-lbl{display:flex;align-items:center;gap:8px;color:#9aa3b2;font-size:12px}
-.box-val{font:800 18px/1.1 ui-sans-serif,system-ui}
-
-.cooldown{display:flex;align-items:center;gap:8px;color:#9fb2d0;margin:10px 0}
+.wheel{display:grid;place-items:center;gap:12px}
+.cooldown{display:flex;align-items:center;gap:8px;color:#9fb2d0;margin:6px 0 2px}
 
 .btn{
   width:100%; padding:14px; border-radius:14px; border:none; color:#0b0f1a; font-weight:900;
   background:linear-gradient(145deg,#fde68a,#60a5fa);
   display:flex; align-items:center; justify-content:center; gap:8px;
-  transition: opacity 0.2s;
+  transition: opacity .2s;
 }
-.btn:disabled{opacity:.5; cursor: not-allowed;}
-.btn:not(:disabled):active{opacity:.8}
-
-.spin{animation:spin 1s linear infinite} 
-@keyframes spin{to{transform:rotate(360deg)}}
+.btn:disabled{opacity:.5; cursor:not-allowed;}
+.btn:not(:disabled):active{opacity:.85}
 
 .note{
-  margin-top:10px; padding:10px 12px; border-radius:10px; 
+  margin-top:10px; padding:10px 12px; border-radius:10px;
   background:#0e1525; color:#cbd5e1; font-size:13px;
 }
 .note.warn{background:#422006; color:#fed7aa; border:1px solid #92400e}
-.note.success{background:#064e3b; color:#a7f3d0; border:1px solid #065f46}
 
-@media (max-width:360px){ .row{grid-template-columns:1fr} }
+.spin{animation:spin 1s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* toast */
+:global(.toast){
+  position: fixed; top: calc(64px + env(safe-area-inset-top)); left: 50%;
+  transform: translateX(-50%) translateY(-10px);
+  background: linear-gradient(135deg,#22c55e,#10b981); color:#0b0f1a;
+  padding: 10px 14px; border-radius: 12px; font-weight: 800; font-size: 13px;
+  box-shadow: 0 10px 30px rgba(16,185,129,.35); opacity: 0; z-index: 1000; transition: transform .2s, opacity .2s
+}
+:global(.toast.show){ opacity:1; transform: translateX(-50%) translateY(0) }
 </style>
