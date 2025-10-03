@@ -32,7 +32,10 @@ async function submit () {
   busy.value = true
 
   const n = Number(amount.value)
-  if (!Number.isFinite(n) || n <= 0) { msg.value = 'Số tiền không hợp lệ'; busy.value = false; return }
+  if (!Number.isFinite(n) || n < 2000) {
+    msg.value = 'Tối thiểu 2.000 VND'
+    busy.value = false; return
+  }
   if (n > (prof.value?.vnd_balance ?? 0)) { msg.value = 'Số dư không đủ'; busy.value = false; return }
   if (!dest.value.trim() || !bankName.value.trim() || !accountName.value.trim()) {
     msg.value = 'Vui lòng điền đầy đủ thông tin ngân hàng'; busy.value = false; return
@@ -51,17 +54,27 @@ async function submit () {
         account_name: accountName.value.trim()
       })
     })
-    if (!r.ok) throw new Error(await r.text())
+
+    const data = await r.json().catch(()=> ({}))
+    if (!r.ok) {
+      if (data?.error === 'daily_limit')   msg.value = 'Hôm nay bạn đã tạo 1 yêu cầu rút. Thử lại vào ngày mai.'
+      else if (data?.error === 'min_withdraw') msg.value = 'Tối thiểu 2.000 VND'
+      else if (data?.error === 'insufficient') msg.value = 'Số dư không đủ'
+      else msg.value = 'Không tạo được lệnh rút.'
+      busy.value = false
+      return
+    }
 
     amount.value = ''; dest.value = ''; bankName.value = ''; accountName.value = ''
     await Promise.all([loadProfile(), loadList()])
     msg.value = 'Tạo lệnh rút thành công! Chờ xử lý...'
   } catch (e) {
-    msg.value = 'Lỗi: ' + e.message
+    msg.value = 'Lỗi kết nối. Thử lại sau.'
   } finally {
     busy.value = false
   }
 }
+
 
 function formatDate (s) {
   return new Date(s).toLocaleString('vi-VN', {

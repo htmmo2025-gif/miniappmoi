@@ -17,7 +17,7 @@ const REWARDS = [1,2,3,4,5,6,7]
 const checkedToday = computed(() => remaining.value > 0)
 const nextReward = computed(() => REWARDS[Math.max(0, day.value - 1)])
 
-function todayStart() { const d = new Date(); d.setHours(0,0,0,0); return d.getTime() }
+
 
 function getUserId() {
   return String(
