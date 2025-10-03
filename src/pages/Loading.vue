@@ -47,7 +47,7 @@ async function verifyTelegram() {
 
 async function checkIsAdmin(tid) {
   try {
-    const r = await fetch('/api/admin/whoami?tid=' + encodeURIComponent(tid))
+    const r = await fetch('/api/admin/whoami?tid=' + encodeURIComponent(tid),{ credentials: 'include' })
     if (!r.ok) return false
     const j = await r.json()
     return !!j.is_admin
