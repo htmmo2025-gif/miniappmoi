@@ -90,7 +90,7 @@ onMounted(() => {
       <section class="card">
         <div class="title">
           <i class="bi bi-people-fill"></i>
-          Chia sẻ để nhận F1
+          Chia sẻ để nhận 10% từ cấp dưới
         </div>
 
         <div class="invite-box">
