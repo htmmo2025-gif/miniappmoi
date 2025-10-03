@@ -34,7 +34,7 @@ function goSwap()     { router.push({ name: 'swap' }) }
 function goWheel()    { router.push({ name: 'wheel' }) }
 function goCheckin()  { router.push({ name: 'checkin' }) }
 function openSupport() {
-  const url = 'https://t.me/your_support_channel'
+  const url = 'https://t.me/HTW_Announcements'
   if (window.Telegram?.WebApp?.openTelegramLink) {
     window.Telegram.WebApp.openTelegramLink(url)
   } else {
