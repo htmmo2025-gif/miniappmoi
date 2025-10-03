@@ -36,7 +36,9 @@ async function verifyTelegram() {
   // initData dùng cho /api/tg/verify
   const qs = new URLSearchParams(tg?.initData || '')
   try {
-    const ok = await fetch('/api/tg/verify?' + qs.toString()).then(r => r.ok)
+    const ok = await fetch('/api/tg/verify?' + qs.toString(),{
+  credentials: 'include'   // <<< bắt buộc để nhận Set-Cookie từ server
+}).then(r => r.ok)
     return ok
   } catch {
     return false
