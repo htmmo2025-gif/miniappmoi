@@ -160,14 +160,6 @@ onUnmounted(stopTicker)
     <header class="topbar"><h1>Vòng quay may mắn</h1></header>
 
     <main class="wrap">
-      <!-- Số dư -->
-      <section class="card hero">
-        <div class="hero-ic"><i class="bi bi-bullseye"></i></div>
-        <div class="hero-t">
-          <div class="label">Số dư HTW</div>
-          <div class="amount">{{ state.htw_balance.toLocaleString() }} <span>HTW</span></div>
-        </div>
-      </section>
 
       <section class="card wheel">
         <LuckyWheel

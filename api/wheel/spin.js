@@ -1,26 +1,51 @@
 // /api/wheel/spin.js
 import { supa } from '../_supa.js'
-function uid(req){ const m=(req.headers.cookie||'').match(/(?:^|;\s*)tg_uid=(\d+)/); return m?Number(m[1]):null }
 
-export default async (req,res)=>{
-  try{
-    if(req.method!=='POST') return res.status(405).send('Method not allowed')
-    const tgUid = uid(req); if(!tgUid) return res.status(401).send('Unauthorized')
+const COOLDOWN = Number(process.env.ADSGRAM_WHEEL_REWARD_COOLDOWN || 600)
 
-    // 6 ô trên vòng quay
-    const { data, error } = await supa.rpc('wheel_spin', { p_uid: tgUid, p_segments: 6 })
-    if(error) return res.status(500).json({ ok:false, error:'Supabase error' })
-    const row = Array.isArray(data)? data[0] : data
+function getUid(req) {
+  const m = (req.headers.cookie || '').match(/(?:^|;\s*)tg_uid=(\d+)/)
+  return m ? Number(m[1]) : null
+}
 
-    if(!row?.ok){
-      return res.status(200).json({ ok:false, reason:'no_spins' })
-    }
-    return res.status(200).json({
-      ok:true,
-      index: Number(row.index||0),
-      add: Number(row.add||0),
-      balance: Number(row.balance||0),
-      spins: Number(row.spins||0)
+export default async function handler(req, res) {
+  try {
+    if (req.method !== 'POST') return res.status(405).send('Method not allowed')
+    const uid = getUid(req)
+    if (!uid) return res.status(401).send('Unauthorized')
+
+    // Gọi RPC để đảm bảo tính atomic
+    const { data, error } = await supa.rpc('wheel_spin', {
+      p_uid: uid,
+      p_cooldown_secs: COOLDOWN,
     })
-  }catch(e){ res.status(500).json({ ok:false, error:'Server error' }) }
+
+    if (error) {
+      console.error('wheel_spin RPC error:', error)
+      // Trả 200 + ok:false để FE xử lý thống nhất
+      return res.status(200).json({ ok: false, remaining: COOLDOWN })
+    }
+
+    const row = Array.isArray(data) ? data[0] : data
+
+    if (!row?.ok) {
+      // Chưa hết cooldown / bị chặn tạm thời
+      return res.status(200).json({
+        ok: false,
+        remaining: Math.max(0, Number(row?.remaining ?? COOLDOWN)),
+      })
+    }
+
+    // Thành công
+    return res.status(200).json({
+      ok: true,
+      index: Number(row.index ?? 0),
+      add: Number(row.add ?? 0),
+      htw_balance: Number(row.new_balance ?? 0),
+      remaining: Number(row.remaining ?? COOLDOWN),
+    })
+  } catch (e) {
+    console.error('wheel spin error:', e)
+    return res.status(200).json({ ok: false, remaining: COOLDOWN })
+  }
 }
