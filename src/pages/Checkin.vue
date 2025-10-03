@@ -166,37 +166,59 @@ onMounted(async () => {
     <div class="header-section">
       <div class="header-glow"></div>
       <h1 class="header-title">
-        <span class="title-icon">🎁</span>
+        <i class="bi bi-gift-fill title-icon"></i>
         Điểm Danh Hàng Ngày
       </h1>
-      <p class="header-subtitle">Điểm danh liên tục 7 ngày để nhận thưởng lớn</p>
+      <p class="header-subtitle">
+        <i class="bi bi-calendar-check"></i>
+        Điểm danh liên tục 7 ngày để nhận thưởng lớn
+      </p>
     </div>
 
     <!-- Loading -->
     <div v-if="loading" class="loading-container">
       <div class="loading-spinner"></div>
-      <p class="loading-text">Đang tải...</p>
+      <p class="loading-text">
+        <i class="bi bi-hourglass-split"></i>
+        Đang tải...
+      </p>
     </div>
 
     <!-- Content -->
     <div v-else class="content-section">
       <!-- Balance Card -->
       <div class="balance-card">
-        <div class="balance-icon">💰</div>
+        <div class="balance-icon">
+          <i class="bi bi-wallet2"></i>
+        </div>
         <div class="balance-info">
-          <p class="balance-label">Số dư HTW</p>
+          <p class="balance-label">
+            <i class="bi bi-coin"></i>
+            Số dư HTW
+          </p>
           <p class="balance-amount">{{ state.htw_balance.toLocaleString() }}</p>
+        </div>
+        <div class="balance-trend">
+          <i class="bi bi-graph-up-arrow"></i>
         </div>
       </div>
 
       <!-- Checkin Progress -->
       <div class="progress-section">
         <div class="progress-header">
-          <span class="progress-title">Tiến trình: Ngày {{ currentDay }}/7</span>
-          <span class="progress-badge">{{ Math.floor((currentDay / 7) * 100) }}%</span>
+          <span class="progress-title">
+            <i class="bi bi-trophy"></i>
+            Tiến trình: Ngày {{ currentDay }}/7
+          </span>
+          <span class="progress-badge">
+            <i class="bi bi-percent"></i>
+            {{ Math.floor((currentDay / 7) * 100) }}
+          </span>
         </div>
         <div class="progress-bar">
-          <div class="progress-fill" :style="{ width: `${(currentDay / 7) * 100}%` }"></div>
+          <div class="progress-fill" :style="{ width: `${(currentDay / 7) * 100}%` }">
+            <i class="bi bi-star-fill progress-star"></i>
+          </div>
         </div>
       </div>
 
@@ -214,23 +236,31 @@ onMounted(async () => {
             }
           ]"
         >
-          <div class="day-number">{{ day }}</div>
+          <div class="day-header">
+            <i class="bi bi-calendar-day"></i>
+            <span class="day-number">{{ day }}</span>
+          </div>
           <div class="day-reward">
-            <span class="reward-amount">+{{ rewards[day - 1] }}</span>
-            <span class="reward-currency">HTW</span>
+            <i class="bi bi-gem"></i>
+            <span class="reward-amount">{{ rewards[day - 1] }}</span>
           </div>
           <div class="day-status">
-            <span v-if="day < currentDay || (day === currentDay && isCheckedToday)" class="status-icon">✓</span>
-            <span v-else-if="day === currentDay" class="status-icon pulse">👆</span>
-            <span v-else class="status-icon">🔒</span>
+            <i v-if="day < currentDay || (day === currentDay && isCheckedToday)" 
+               class="bi bi-check-circle-fill status-icon"></i>
+            <i v-else-if="day === currentDay" 
+               class="bi bi-hand-index-thumb-fill status-icon pulse"></i>
+            <i v-else class="bi bi-lock-fill status-icon"></i>
           </div>
         </div>
       </div>
 
       <!-- Status Message -->
-      <div v-if="msg" class="status-message" :class="{ 'status-success': msg.includes('thành công') }">
-        {{ msg }}
-      </div>
+      <transition name="fade">
+        <div v-if="msg" class="status-message" :class="{ 'status-success': msg.includes('thành công') }">
+          <i :class="msg.includes('thành công') ? 'bi bi-check-circle-fill' : 'bi bi-exclamation-circle-fill'"></i>
+          {{ msg }}
+        </div>
+      </transition>
 
       <!-- Checkin Button -->
       <button
@@ -244,45 +274,69 @@ onMounted(async () => {
       >
         <span v-if="busy" class="button-content">
           <span class="button-spinner"></span>
+          <i class="bi bi-hourglass-split"></i>
           Đang xử lý...
         </span>
         <span v-else-if="!monetagReady" class="button-content">
           <span class="button-spinner"></span>
+          <i class="bi bi-cloud-download"></i>
           Đang tải SDK...
         </span>
         <span v-else-if="isCheckedToday" class="button-content">
-          ✅ Đã điểm danh hôm nay
+          <i class="bi bi-check-circle-fill"></i>
+          Đã điểm danh hôm nay
         </span>
         <span v-else class="button-content">
-          <span class="button-icon">🎁</span>
+          <i class="bi bi-gift-fill button-icon"></i>
           Điểm danh nhận {{ nextReward }} HTW
+          <i class="bi bi-arrow-right-circle-fill"></i>
         </span>
       </button>
 
       <!-- Info Card -->
       <div class="info-card">
         <h3 class="info-title">
-          <span class="info-icon">ℹ️</span>
+          <i class="bi bi-info-circle-fill info-icon"></i>
           Quy tắc điểm danh
         </h3>
         <ul class="info-list">
           <li class="info-item">
-            <span class="item-bullet">•</span>
+            <i class="bi bi-check2-circle item-bullet"></i>
             <span>Điểm danh mỗi ngày để nhận phần thưởng HTW</span>
           </li>
           <li class="info-item">
-            <span class="item-bullet">•</span>
+            <i class="bi bi-arrow-up-circle item-bullet"></i>
             <span>Phần thưởng tăng dần từ 1-7 HTW theo ngày</span>
           </li>
           <li class="info-item">
-            <span class="item-bullet">•</span>
+            <i class="bi bi-x-circle item-bullet"></i>
             <span>Bỏ lỡ 1 ngày sẽ phải bắt đầu lại từ đầu</span>
           </li>
           <li class="info-item">
-            <span class="item-bullet">•</span>
+            <i class="bi bi-play-circle item-bullet"></i>
             <span>Xem quảng cáo để hoàn thành điểm danh</span>
           </li>
         </ul>
+      </div>
+
+      <!-- Rewards Preview -->
+      <div class="rewards-preview">
+        <h3 class="rewards-title">
+          <i class="bi bi-stars"></i>
+          Phần thưởng theo ngày
+        </h3>
+        <div class="rewards-grid">
+          <div v-for="(reward, idx) in rewards" :key="idx" class="reward-item">
+            <div class="reward-day">
+              <i class="bi bi-calendar-event"></i>
+              Ngày {{ idx + 1 }}
+            </div>
+            <div class="reward-value">
+              <i class="bi bi-coin"></i>
+              +{{ reward }} HTW
+            </div>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -292,6 +346,9 @@ onMounted(async () => {
 </template>
 
 <style scoped>
+/* Import Bootstrap Icons */
+@import url('https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css');
+
 .checkin-container {
   min-height: 100vh;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
@@ -326,10 +383,14 @@ onMounted(async () => {
   margin: 0 0 10px;
   text-shadow: 0 2px 20px rgba(0, 0, 0, 0.3);
   position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
 }
 
 .title-icon {
-  display: inline-block;
+  font-size: 36px;
   animation: bounce 2s ease-in-out infinite;
 }
 
@@ -338,6 +399,10 @@ onMounted(async () => {
   color: rgba(255, 255, 255, 0.9);
   margin: 0;
   text-shadow: 0 1px 10px rgba(0, 0, 0, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
 }
 
 /* Loading */
@@ -362,6 +427,9 @@ onMounted(async () => {
   color: white;
   margin-top: 20px;
   font-size: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 /* Content Section */
@@ -385,6 +453,7 @@ onMounted(async () => {
 
 .balance-icon {
   font-size: 48px;
+  color: #fbbf24;
   animation: float 3s ease-in-out infinite;
 }
 
@@ -397,6 +466,9 @@ onMounted(async () => {
   color: rgba(255, 255, 255, 0.8);
   margin: 0 0 4px;
   font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .balance-amount {
@@ -405,6 +477,12 @@ onMounted(async () => {
   color: white;
   margin: 0;
   text-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+}
+
+.balance-trend {
+  font-size: 32px;
+  color: #4ade80;
+  animation: pulse-icon 2s ease-in-out infinite;
 }
 
 /* Progress Section */
@@ -428,6 +506,9 @@ onMounted(async () => {
   font-size: 14px;
   font-weight: 600;
   color: white;
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .progress-badge {
@@ -437,13 +518,17 @@ onMounted(async () => {
   font-size: 12px;
   font-weight: 700;
   color: white;
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 
 .progress-bar {
-  height: 10px;
+  height: 12px;
   background: rgba(0, 0, 0, 0.2);
   border-radius: 10px;
   overflow: hidden;
+  position: relative;
 }
 
 .progress-fill {
@@ -452,6 +537,16 @@ onMounted(async () => {
   border-radius: 10px;
   transition: width 0.5s ease;
   box-shadow: 0 0 10px rgba(255, 215, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding-right: 6px;
+}
+
+.progress-star {
+  color: white;
+  font-size: 10px;
+  animation: twinkle 1.5s ease-in-out infinite;
 }
 
 /* Checkin Grid */
@@ -465,7 +560,7 @@ onMounted(async () => {
 .day-card {
   aspect-ratio: 1;
   border-radius: 16px;
-  padding: 8px;
+  padding: 8px 4px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -491,35 +586,44 @@ onMounted(async () => {
   border: 2px dashed rgba(255, 255, 255, 0.3);
 }
 
+.day-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.day-header i {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.8);
+}
+
 .day-number {
   font-size: 10px;
   font-weight: 700;
   color: white;
-  opacity: 0.8;
 }
 
 .day-reward {
   display: flex;
   flex-direction: column;
   align-items: center;
+  gap: 2px;
+}
+
+.day-reward i {
+  font-size: 16px;
+  color: white;
 }
 
 .reward-amount {
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 800;
   color: white;
-  line-height: 1;
-}
-
-.reward-currency {
-  font-size: 8px;
-  font-weight: 600;
-  color: rgba(255, 255, 255, 0.8);
-  margin-top: 2px;
 }
 
 .day-status {
-  font-size: 14px;
+  font-size: 16px;
 }
 
 .status-icon.pulse {
@@ -537,11 +641,24 @@ onMounted(async () => {
   color: white;
   font-weight: 600;
   border: 1px solid rgba(255, 255, 255, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
 }
 
 .status-success {
   background: rgba(34, 197, 94, 0.3);
   border-color: rgba(34, 197, 94, 0.5);
+}
+
+.fade-enter-active, .fade-leave-active {
+  transition: opacity 0.3s, transform 0.3s;
+}
+
+.fade-enter-from, .fade-leave-to {
+  opacity: 0;
+  transform: translateY(-10px);
 }
 
 /* Checkin Button */
@@ -609,6 +726,7 @@ onMounted(async () => {
   border-radius: 16px;
   padding: 20px;
   border: 1px solid rgba(255, 255, 255, 0.2);
+  margin-bottom: 20px;
 }
 
 .info-title {
@@ -623,6 +741,7 @@ onMounted(async () => {
 
 .info-icon {
   font-size: 20px;
+  color: #fbbf24;
 }
 
 .info-list {
@@ -633,6 +752,7 @@ onMounted(async () => {
 
 .info-item {
   display: flex;
+  align-items: center;
   gap: 12px;
   color: rgba(255, 255, 255, 0.9);
   font-size: 14px;
@@ -645,9 +765,60 @@ onMounted(async () => {
 }
 
 .item-bullet {
-  color: #fbbf24;
-  font-weight: 700;
+  color: #4ade80;
   font-size: 18px;
+  flex-shrink: 0;
+}
+
+/* Rewards Preview */
+.rewards-preview {
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  border-radius: 16px;
+  padding: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.rewards-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: white;
+  margin: 0 0 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.rewards-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+
+.reward-item {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  padding: 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.reward-day {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.8);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.reward-value {
+  font-size: 14px;
+  font-weight: 700;
+  color: #fbbf24;
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 
 /* Animations */
@@ -673,5 +844,10 @@ onMounted(async () => {
 @keyframes pulse-icon {
   0%, 100% { opacity: 1; transform: scale(1); }
   50% { opacity: 0.6; transform: scale(1.2); }
+}
+
+@keyframes twinkle {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
 }
 </style>
