@@ -99,4 +99,5 @@ export default async function handler(req, res) {
 }
 
 // Ép runtime Node 20 để thống nhất log & env trên Vercel
-export const config = { runtime: 'nodejs20.x' }
+export const config = { runtime: 'nodejs' }
+
