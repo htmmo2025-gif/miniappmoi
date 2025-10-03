@@ -53,11 +53,8 @@ const routes = {
 
 // ===== utils =====
 function setCors(req, res) {
-  // Khi dùng credentials, KHÔNG được dùng '*'
-  const origin =
-    req.headers.origin ||
-    (req.headers.host ? `https://${req.headers.host}` : '*')
-
+  // khi dùng credentials, KHÔNG dùng '*'
+  const origin = req.headers.origin || (req.headers.host ? `https://${req.headers.host}` : '*')
   res.setHeader('Access-Control-Allow-Origin', origin)
   res.setHeader('Vary', 'Origin')
   res.setHeader('Access-Control-Allow-Credentials', 'true')
@@ -78,7 +75,7 @@ function normalizePathname(url) {
 // ===== main handler =====
 export default async function handler(req, res) {
   try {
-    setCors(req, res) // <<< SỬA Ở ĐÂY
+    setCors(req, res)
 
     if (req.method === 'OPTIONS' || req.method === 'HEAD') {
       res.statusCode = 204
@@ -96,5 +93,5 @@ export default async function handler(req, res) {
   }
 }
 
-// Node serverless runtime
+// Node serverless runtime (đừng dùng "nodejs20.x")
 export const config = { runtime: 'nodejs' }
