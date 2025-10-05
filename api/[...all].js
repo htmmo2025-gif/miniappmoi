@@ -18,6 +18,7 @@ import taskAdsgramReward from '../server/handlers/tasks/adsgram-reward.js'
 // ===== others (mine/swap/wheel) =====
 import mine      from '../server/handlers/mine.js'
 import swap      from '../server/handlers/swap.js'
+import chest      from '../server/handlers/chest.js'
 // ===== wheel =====
 import wheelStatus from '../server/handlers/wheel.js'
 import wheelSpin   from '../server/handlers/wheel/spin.js'
@@ -49,6 +50,8 @@ const routes = {
   // game
   'GET /api/mine'       : mine,
   'POST /api/mine'       : mine,
+  'GET /api/chest'      : chest, 
+  'POST /api/chest'     : chest,
   'POST /api/swap'       : swap,
   // Wheel
   'GET /api/wheel'       : wheelStatus,

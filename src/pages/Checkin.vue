@@ -8,7 +8,7 @@ const day = ref(1)          // 1..7
 const remaining = ref(0)    // giây cooldown tới 0h
 const balance = ref(0)      // số dư thật
 const busy = ref(false)
-const ready = ref(false)    // Monetag SDK
+const ready = ref(false)    // Monetag SDK đã sẵn sàng?
 const fnRef = ref(null)
 const msg = ref('')
 
@@ -17,8 +17,7 @@ const REWARDS = [1,2,3,4,5,6,7]
 const checkedToday = computed(() => remaining.value > 0)
 const nextReward = computed(() => REWARDS[Math.max(0, day.value - 1)])
 
-
-
+/* ===== Helpers ===== */
 function getUserId() {
   return String(
     profile.value?.telegram_id ||
@@ -26,9 +25,11 @@ function getUserId() {
   )
 }
 
-/* ---------- Monetag ---------- */
+/* ===== Monetag (giống rương: onRewarded + fallback thời gian tối thiểu) ===== */
+const MIN_REWARD_MS = Number(import.meta.env.VITE_MONETAG_MIN_VIEW_MS || 12000)
+
 function detectMonetagFnName() {
-  const s = [...document.scripts].find(x => /liblt\.com\/sdk\.js|lib11\.com\/sdk\.js/.test(x.src))
+  const s = [...document.scripts].find(x => /lib1?t\.com\/sdk\.js|lib11\.com\/sdk\.js/.test(x.src))
   const zone = s?.getAttribute('data-zone')
   const name = s?.getAttribute('data-sdk')
   if (name) return name
@@ -36,6 +37,7 @@ function detectMonetagFnName() {
   const z = import.meta.env.VITE_MONETAG_ZONE_ID
   return z ? `show_${z}` : null
 }
+
 async function waitSdk(ms=5000) {
   const name = detectMonetagFnName()
   const t0 = Date.now()
@@ -43,6 +45,7 @@ async function waitSdk(ms=5000) {
     const f = name && window[name]
     if (typeof f === 'function') {
       fnRef.value = f
+      // preload nhẹ để SDK khởi động (không cần chặn lỗi)
       try { await f({ type:'preload', ymid: getUserId() }).catch(()=>{}) } catch {}
       ready.value = true
       return true
@@ -52,7 +55,50 @@ async function waitSdk(ms=5000) {
   return false
 }
 
-/* ---------- API ---------- */
+/** BẮT BUỘC xem ad: resolve chỉ khi onRewarded()
+ *  Nếu SDK không bắn event mà chỉ trả promise khi đóng → áp ngưỡng thời gian tối thiểu.
+ */
+function showMonetagRewarded() {
+  return new Promise(async (resolve, reject) => {
+    try {
+      const f = fnRef.value
+      if (typeof f !== 'function') return reject(new Error('SDK chưa sẵn sàng'))
+      const uid = getUserId()
+      if (!uid) return reject(new Error('Thiếu Telegram ID'))
+
+      const started = Date.now()
+      let rewarded = false
+      let closed = false
+
+      const ret = f({
+        ymid: uid,
+        onRewarded: () => { rewarded = true; resolve(true) },
+        onClose: () => {
+          closed = true
+          if (!rewarded) {
+            const elapsed = Date.now() - started
+            if (elapsed >= MIN_REWARD_MS) resolve(true)
+            else reject(new Error('Bạn đóng quá nhanh, vui lòng xem hết quảng cáo.'))
+          }
+        }
+      })
+
+      // Fallback: 1 số zone trả về Promise thay vì events
+      if (ret && typeof ret.then === 'function') {
+        ret.then(() => {
+          if (rewarded) return
+          const elapsed = Date.now() - started
+          if (elapsed >= MIN_REWARD_MS) resolve(true)
+          else reject(new Error('Bạn đóng quá nhanh, vui lòng xem hết quảng cáo.'))
+        }).catch(reject)
+      }
+    } catch (e) {
+      reject(e)
+    }
+  })
+}
+
+/* ===== API ===== */
 async function loadStatus() {
   const tid = getUserId()
   const r = await fetch(`/api/checkin?tid=${encodeURIComponent(tid)}`, { credentials:'include' })
@@ -67,15 +113,11 @@ async function doCheckin() {
   if (busy.value || checkedToday.value || !ready.value) return
   busy.value = true; msg.value = ''
   try {
-    const f = fnRef.value
-    if (!f) throw new Error('SDK chưa sẵn sàng')
+    // 1) BẮT BUỘC xem ad đủ điều kiện
+    await showMonetagRewarded()
+
+    // 2) GỌI API điểm danh thật
     const uid = getUserId()
-    if (!uid) throw new Error('Thiếu Telegram ID')
-
-    // BẮT BUỘC xem Ad
-    await f({ ymid: uid })
-
-    // GỌI API thật
     const r = await fetch(`/api/checkin?tid=${encodeURIComponent(uid)}`, {
       method: 'POST', credentials: 'include'
     })
@@ -95,17 +137,18 @@ async function doCheckin() {
     setTimeout(()=> msg.value = '', 1500)
   } catch (e) {
     console.error(e)
-    msg.value = e?.message?.includes('ID') ? 'Thiếu Telegram ID — hãy mở trong Telegram.' : 'Không xem được quảng cáo.'
+    msg.value = e?.message?.includes('ID')
+      ? 'Thiếu Telegram ID — hãy mở trong Telegram.'
+      : (e?.message || 'Không xem được quảng cáo.')
     setTimeout(()=> msg.value='', 2000)
   } finally {
     busy.value = false
   }
 }
 
-/* ---------- init ---------- */
+/* ===== init ===== */
 onMounted(async () => {
   try {
-    // Lấy profile thật (để hiện số dư + id)
     const pr = await fetch('/api/profile', { credentials:'include' })
     if (pr.ok) {
       const j = await pr.json()
