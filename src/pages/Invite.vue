@@ -9,7 +9,6 @@ const info = ref({
   share_link: '',
   direct_count: 0,
   referrals: [],
-  commission_total: 0, // sẽ là 0 nếu API chưa trả trường này
 })
 
 async function load() {
@@ -124,10 +123,6 @@ onMounted(() => {
           <div class="stat">
             <div class="stat-lbl">Số F1</div>
             <div class="stat-val">{{ info.direct_count }}</div>
-          </div>
-          <div class="stat">
-            <div class="stat-lbl">Hoa hồng (HTW)</div>
-            <div class="stat-val">{{ (info.commission_total ?? 0).toLocaleString() }}</div>
           </div>
         </div>
       </section>
