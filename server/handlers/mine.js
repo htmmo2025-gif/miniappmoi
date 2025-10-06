@@ -1,7 +1,7 @@
 // /api/mine.js
 import { supa } from './_supa.js'
 
-const REWARD   = Number(process.env.MINING_REWARD_HTW ?? 20)      // HTW / claim
+const REWARD   = Number(process.env.MINING_REWARD_HTW ?? 10)      // HTW / claim
 const COOLDOWN = Number(process.env.MINING_COOLDOWN_SEC ?? 1800)  // 30 phút
 
 function getUidFromCookie(req) {
