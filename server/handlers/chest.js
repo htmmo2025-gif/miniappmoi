@@ -1,8 +1,8 @@
 // /api/chest.js
 import { supa } from './_supa.js'
 
-const REWARD   = Number(process.env.CHEST_REWARD_HTW   ?? 10)     // HTW / mở rương
-const COOLDOWN = Number(process.env.CHEST_COOLDOWN_SEC ?? 1800)   // 30 phút
+const REWARD   = Number(process.env.CHEST_REWARD_HTW   ?? 5)     // HTW / mở rương
+const COOLDOWN = Number(process.env.CHEST_COOLDOWN_SEC ?? 1200)   // 20 phút
 
 function getUidFromCookie(req) {
   const m = (req.headers.cookie || '').match(/(?:^|;\s*)tg_uid=(\d+)/)

@@ -5,7 +5,7 @@ import BottomNav from '../components/BottomNav.vue'
 /** BlockId phải là dạng task-xxx */
 const raw = String(import.meta.env.VITE_ADSGRAM_BLOCK_ID ?? '').trim()
 const blockId = /^task-\d+$/i.test(raw) ? raw : (/^\d+$/.test(raw) ? `task-${raw}` : '')
-const rewardUi = 10
+const rewardUi = 5
 
 const prof = ref(null)
 const sdkReady = ref(false)
