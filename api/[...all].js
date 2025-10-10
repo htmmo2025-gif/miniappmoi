@@ -15,14 +15,15 @@ import adsgramRewardUrl  from '../server/handlers/adsgram/reward-url.js'
 import adsgramWebhook    from '../server/handlers/adsgram/reward-webhook.js'
 import taskAdsgramReward from '../server/handlers/tasks/adsgram-reward.js'
 
-// ===== NEW: watch ads (Adsgram & Montag) =====
-import watchAdsgram   from '../server/handlers/watchadsgram.js'
-import watchAdsMontag from '../server/handlers/watchadsmontag.js'
-
 // ===== others (mine/swap/wheel) =====
 import mine      from '../server/handlers/mine.js'
 import swap      from '../server/handlers/swap.js'
 import chest      from '../server/handlers/chest.js'
+
+// ===== NEW: watch ads (Adsgram & Montag) =====
+import watchAdsgram   from '../server/handlers/watchadsgram.js'
+import watchAdsMontag from '../server/handlers/watchadsmontag.js'
+
 // ===== wheel =====
 import wheelStatus from '../server/handlers/wheel.js'
 import wheelSpin   from '../server/handlers/wheel/spin.js'
@@ -31,7 +32,8 @@ import wheelSpin   from '../server/handlers/wheel/spin.js'
 import adminWhoami         from '../server/handlers/admin/whoami.js'
 import adminWithdraws      from '../server/handlers/admin/withdraws.js'
 import adminWithdrawAction from '../server/handlers/admin/withdraw_action.js'
-
+import adminUserStats      from '../server/handlers/admin/user-stats.js'
+import adminSummary        from '../server/handlers/admin/summary.js'
 
 // ===== route map =====
 const routes = {
@@ -57,13 +59,13 @@ const routes = {
   'GET /api/chest'      : chest, 
   'POST /api/chest'     : chest,
   'POST /api/swap'       : swap,
+  
+  // NEW: watch ads
+  'GET /api/watchadsgram'    : watchAdsgram,
+  'POST /api/watchadsgram'   : watchAdsgram,
+  'GET /api/watchadsmontag'  : watchAdsMontag,
+  'POST /api/watchadsmontag' : watchAdsMontag,
 
-    // NEW: watch ads
-    'GET /api/watchadsgram'    : watchAdsgram,
-    'POST /api/watchadsgram'   : watchAdsgram,
-    'GET /api/watchadsmontag'  : watchAdsMontag,
-    'POST /api/watchadsmontag' : watchAdsMontag,
-    
   // Wheel
   'GET /api/wheel'       : wheelStatus,
   'POST /api/wheel/spin' : wheelSpin,
@@ -72,6 +74,8 @@ const routes = {
   'GET /api/admin/whoami': adminWhoami,
   'GET /api/admin/withdraws'         : adminWithdraws,
   'POST /api/admin/withdraw_action'  : adminWithdrawAction,
+  'GET /api/admin/user-stats': adminUserStats, // ?tg_id=...
+  'GET /api/admin/summary'   : adminSummary,   // tổng VNĐ done
 }
 
 // ===== utils =====
