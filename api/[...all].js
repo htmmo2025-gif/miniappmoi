@@ -15,6 +15,10 @@ import adsgramRewardUrl  from '../server/handlers/adsgram/reward-url.js'
 import adsgramWebhook    from '../server/handlers/adsgram/reward-webhook.js'
 import taskAdsgramReward from '../server/handlers/tasks/adsgram-reward.js'
 
+// ===== NEW: watch ads (Adsgram & Montag) =====
+import watchAdsgram   from '../server/handlers/watchadsgram.js'
+import watchAdsMontag from '../server/handlers/watchadsmontag.js'
+
 // ===== others (mine/swap/wheel) =====
 import mine      from '../server/handlers/mine.js'
 import swap      from '../server/handlers/swap.js'
@@ -53,6 +57,13 @@ const routes = {
   'GET /api/chest'      : chest, 
   'POST /api/chest'     : chest,
   'POST /api/swap'       : swap,
+
+    // NEW: watch ads
+    'GET /api/watchadsgram'    : watchAdsgram,
+    'POST /api/watchadsgram'   : watchAdsgram,
+    'GET /api/watchadsmontag'  : watchAdsMontag,
+    'POST /api/watchadsmontag' : watchAdsMontag,
+    
   // Wheel
   'GET /api/wheel'       : wheelStatus,
   'POST /api/wheel/spin' : wheelSpin,

@@ -9,7 +9,10 @@ import Swap from './pages/Swap.vue'
 import Withdraw from './pages/Withdraw.vue'
 import Wheel from './pages/Wheel.vue'
 import Checkin from './pages/Checkin.vue'
+import Admin from './pages/Admin.vue'
 import AdminWithdraws from './pages/AdminWithdraws.vue'
+import AdminLookup from './pages/AdminLookup.vue'
+import AdminStats from './pages/AdminStats.vue'
 
 export default createRouter({
   history: createWebHistory(),
@@ -23,7 +26,10 @@ export default createRouter({
     { path: '/withdraw', name: 'withdraw', component: Withdraw },
     { path: '/wheel', name: 'wheel', component: Wheel },
     { path: '/checkin', name: 'checkin', component: Checkin },
-    { path: '/admin', name: 'admin', component: AdminWithdraws },
+    { path: '/admin', name: 'admin', component: Admin },
+    { path: '/admin/withdraws', name: 'admin-withdraw', component: AdminWithdraws },
+    { path: '/admin/lookup',    name: 'admin-lookup',    component: AdminLookup },
+    { path: '/admin/stats',     name: 'admin-stats',     component: AdminStats },
     { path: '/error', component: ErrorPage },
   ],
 })

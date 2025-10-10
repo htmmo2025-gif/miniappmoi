@@ -1,6 +1,11 @@
 <!-- src/pages/AdminWithdraws.vue -->
 <script setup>
 import { ref, onMounted, computed } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+const route = useRoute()
+const r = useRouter()
+const is = (p) => route.path.startsWith(p)
+const go = (p) => { if (!is(p)) r.replace(p) }
 
 const items   = ref([])
 const filter  = ref('pending')  // pending | completed | rejected | all
@@ -119,6 +124,18 @@ onMounted(loadList)
 </script>
 
 <template>
+    <!-- Admin tabs -->
+<nav class="admin-tabs">
+  <button :class="{on: is('/admin/withdraws')}" @click="go('/admin/withdraws')">
+    <i class="bi bi-cash-coin"></i> Duyệt rút
+  </button>
+  <button :class="{on: is('/admin/lookup')}" @click="go('/admin/lookup')">
+    <i class="bi bi-person-search"></i> Tra cứu user
+  </button>
+  <button :class="{on: is('/admin/stats')}" @click="go('/admin/stats')">
+    <i class="bi bi-graph-up"></i> Thống kê VNĐ
+  </button>
+</nav>
   <div class="page">
     <header class="top">
       <h1>Admin rút tiền</h1>
@@ -196,6 +213,22 @@ onMounted(loadList)
 </template>
 
 <style scoped>
+.admin-tabs{
+  position: sticky; top: 0; z-index: 15;
+  display:flex; gap:8px; flex-wrap:wrap;
+  padding:10px 12px; margin: -6px -12px 10px;
+  background: linear-gradient(180deg, rgba(11,15,26,.96), rgba(11,15,26,.7) 65%, transparent);
+  backdrop-filter: blur(8px);
+}
+.admin-tabs button{
+  padding:8px 10px; border-radius:999px; border:1px solid rgba(148,163,184,.14);
+  background:#0e1726; color:#cbd5e1; font-weight:800; display:inline-flex; gap:6px; align-items:center;
+}
+.admin-tabs button.on{
+  background:#0b213a; color:#93c5fd; border-color:#2563eb88;
+}
+
+@import url('https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css');
 .page{--bg:#0b0f1a;--card:#101826;--ring:1px solid rgba(148,163,184,.14);--mut:#9aa3b2;color:#e5e7eb;background:var(--bg);min-height:100vh}
 .top{position:sticky;top:0;z-index:10;padding:12px 16px;background:linear-gradient(180deg,rgba(11,15,26,.96),rgba(11,15,26,.7) 65%,transparent);backdrop-filter:blur(8px)}
 .top h1{margin:0 0 8px;font:800 20px/1 ui-sans-serif,system-ui}
