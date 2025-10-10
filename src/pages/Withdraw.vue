@@ -23,6 +23,37 @@ function getTid() {
   )
 }
 
+// Chuẩn hóa: bỏ dấu TV, đổi 'đ'->'d', IN HOA, chỉ giữ A-Z và khoảng trắng
+function vnUpperNoAccentStrict(s = '') {
+  return String(s)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/gi, 'd')
+    .toUpperCase()
+    .replace(/[^A-Z\s]/g, ' ')
+    .replace(/\s{2,}/g, ' ')
+    .trim()
+}
+
+function vnUpperNoAccentLive(s = '') {
+  const raw = String(s)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/gi, 'd')
+    .toUpperCase()
+    .replace(/[^A-Z\s]/g, ' ')
+
+  // gộp nhiều space liên tiếp, nhưng KHÔNG xóa space cuối người dùng vừa nhập
+  // mẹo: nếu ký tự cuối là space, giữ lại
+  const endsWithSpace = /\s$/.test(raw)
+  const collapsed = raw.replace(/\s{2,}/g, ' ')
+  return endsWithSpace ? (collapsed.endsWith(' ') ? collapsed : collapsed + ' ') : collapsed
+}
+
+function onAccountNameInput(e){
+  accountName.value = vnUpperNoAccentLive(e.target.value)
+}
+
 const canSubmit = computed(() => {
   const n = Number(amount.value)
   return !busy.value
@@ -89,7 +120,7 @@ async function submit() {
         channel: channel.value,
         dest: accountNumber.value.trim(),
         bank_name: bankName.value.trim(),
-        account_name: accountName.value.trim()
+        account_name: vnUpperNoAccentStrict(accountName.value) // <-- chuẩn hóa trước khi gửi
       })
     })
 
@@ -97,7 +128,7 @@ async function submit() {
 
     if (!r.ok || data?.ok !== true) {
       // map lỗi từ API
-      if (data?.error === 'daily_limit')   msg.value = 'Mỗi ngày chỉ rút 1 lần. Thử lại vào ngày mai.'
+      if (data?.error === 'daily_limit')      msg.value = 'Mỗi ngày chỉ rút 1 lần. Thử lại vào ngày mai.'
       else if (data?.error === 'min_withdraw') msg.value = 'Tối thiểu 2.000 VND'
       else if (data?.error === 'insufficient') msg.value = 'Số dư không đủ'
       else if (data?.error === 'missing_user') msg.value = 'Thiếu Telegram ID — mở app trong Telegram.'
@@ -177,7 +208,7 @@ onMounted(async () => {
           <input class="txt" v-model="accountNumber" inputmode="numeric" placeholder="1234567890" />
 
           <label class="lbl"><i class="bi bi-person"></i> Tên chủ tài khoản</label>
-          <input class="txt up" v-model="accountName" placeholder="NGUYEN VAN A" />
+          <input class="txt up" v-model="accountName" @input="onAccountNameInput" placeholder="NGUYEN VAN A" />
         </div>
 
         <button class="btn" :disabled="!canSubmit" @click="submit">
