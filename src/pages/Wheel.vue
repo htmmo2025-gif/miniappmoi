@@ -8,7 +8,7 @@ import { LuckyWheel } from '@lucky-canvas/vue'
 const wheelRef = ref(null)
 
 const state = ref({
-  cooldown: 600,      // 10 phút mặc định (server có thể trả khác)
+  cooldown: 1200,      // 20 phút mặc định (server có thể trả khác)
   remaining: 0,       // giây còn lại để xem ad/quay
   htw_balance: 0,     // số dư
 })
@@ -51,12 +51,12 @@ async function showRewardAd () {
 /* ====== WHEEL UI ====== */
 const blocks = [{ padding: '12px', background: '#0f172a' }]
 const prizes = [
-  { background: '#0ea5e9', fonts: [{ text: '+2 HTW',  top: '18px' }] },
-  { background: '#f59e0b', fonts: [{ text: '+4 HTW',  top: '18px' }] },
-  { background: '#10b981', fonts: [{ text: '+6 HTW',  top: '18px' }] },
-  { background: '#8b5cf6', fonts: [{ text: '+8 HTW',  top: '18px' }] },
+  { background: '#0ea5e9', fonts: [{ text: '+1 HTW',  top: '18px' }] },
+  { background: '#f59e0b', fonts: [{ text: '+2 HTW',  top: '18px' }] },
+  { background: '#10b981', fonts: [{ text: '+3 HTW',  top: '18px' }] },
+  { background: '#8b5cf6', fonts: [{ text: '+4 HTW',  top: '18px' }] },
   { background: '#ef4444', fonts: [{ text: 'Hụt 😅',  top: '18px' }] },
-  { background: '#22c55e', fonts: [{ text: '+10 HTW', top: '18px' }] },
+  { background: '#22c55e', fonts: [{ text: '+5 HTW', top: '18px' }] },
 ]
 const buttons = [
   { radius: '40px', background: '#2563eb', pointer: true, fonts: [{ text: 'SPIN', top: '-18px' }] }

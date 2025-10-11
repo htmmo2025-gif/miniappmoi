@@ -1,13 +1,13 @@
 // /api/wheel/spin.js
 import { supa } from '../_supa.js'
 
-const COOLDOWN = Number(process.env.WHEEL_COOLDOWN_SEC || 600)
+const COOLDOWN = Number(process.env.WHEEL_COOLDOWN_SEC || 1200)
 
 // THỨ TỰ PHẢI TRÙNG UI: 0:+2, 1:+4, 2:+6, 3:+8, 4:miss, 5:+10
-const PRIZE_MAP = [2, 4, 6, 8, 0, 10]
+const PRIZE_MAP = [1, 2, 3, 4, 0, 5]
 
 // (tuỳ chọn) trọng số rơi vào từng ô (cùng thứ tự)
-const WEIGHTS = [25, 22, 18, 12, 8, 15] // tổng ~100 là ok
+const WEIGHTS = [25, 15, 15, 15, 20, 10] // tổng ~100 là ok
 
 function getUid(req) {
   const m = (req.headers.cookie || '').match(/(?:^|;\s*)tg_uid=(\d+)/)

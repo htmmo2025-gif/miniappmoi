@@ -1,7 +1,7 @@
 // /api/wheel.js
 import { supa } from './_supa.js'
 
-const COOLDOWN = Number(process.env.ADSGRAM_WHEEL_REWARD_COOLDOWN || 600)
+const COOLDOWN = Number(process.env.ADSGRAM_WHEEL_REWARD_COOLDOWN || 1200)
 
 function getUid(req) {
   const m = (req.headers.cookie || '').match(/(?:^|;\s*)tg_uid=(\d+)/)
