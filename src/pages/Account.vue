@@ -33,6 +33,9 @@ function goWithdraw() { router.push({ name: 'withdraw' }) }
 function goSwap()     { router.push({ name: 'swap' }) }
 function goWheel()    { router.push({ name: 'wheel' }) }
 function goCheckin()  { router.push({ name: 'checkin' }) }
+function goJar()      { router.push({ name: 'jar' })
+}
+
 function openSupport() {
   const url = 'https://t.me/HTW_Announcements'
   if (window.Telegram?.WebApp?.openTelegramLink) {
@@ -113,6 +116,17 @@ onMounted(loadProfile)
             </div>
             <i class="bi bi-chevron-right chev"></i>
           </button>
+
+          <!-- ⭐ Mở hũ -->
+          <button class="item" @click="goJar">
+             <span class="ic ic-jar"><i class="bi bi-gift"></i></span>
+             <div class="meta">
+             <div class="title">Mở hũ</div>
+             <div class="sub">Mời bạn bè để nhận lượt mở hũ</div>
+             </div>
+            <i class="bi bi-chevron-right chev"></i>
+          </button>
+
 
           <!-- ⭐ Điểm danh -->
           <button class="item" @click="goCheckin">
@@ -201,6 +215,7 @@ onMounted(loadProfile)
 .meta .title{font-weight:700;font-size:14px}
 .meta .sub{font-size:12px;color:var(--muted);margin-top:2px}
 .chev{color:var(--muted)}
+.ic-jar{background:linear-gradient(145deg,#f59e0b,#f97316);}
 /* Skeleton */
 .skeleton{display:grid;gap:14px}.sk-card,.sk-item{background:linear-gradient(90deg,rgba(255,255,255,.06),rgba(255,255,255,.12),rgba(255,255,255,.06));background-size:200% 100%;animation:shimmer 1.3s infinite;border-radius:14px;height:64px}.sk-user{height:90px}.sk-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.sk-list{display:grid;gap:10px}
 @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
