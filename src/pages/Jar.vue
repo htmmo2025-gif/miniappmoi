@@ -3,7 +3,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import BottomNav from '../components/BottomNav.vue'
 
-const JAR_COOLDOWN_SEC = Number(import.meta.env.VITE_JAR_COOLDOWN_SEC || 1200)
+const JAR_COOLDOWN_SEC = Number(import.meta.env.VITE_JAR_COOLDOWN_SEC || 1800)
 
 /* ---------- State ---------- */
 const profBal   = ref(0)

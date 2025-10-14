@@ -1,7 +1,7 @@
 // /api/jar.js
 import { supa } from './_supa.js'
 
-const COOLDOWN = Number(process.env.JAR_COOLDOWN_SEC ?? 1200) // 20 phút
+const COOLDOWN = Number(process.env.JAR_COOLDOWN_SEC ?? 1800) // 30 phút
 const MIN_R = Number(process.env.JAR_MIN_REWARD ?? 1)
 const MAX_R = Number(process.env.JAR_MAX_REWARD ?? 5)
 const FEATURE_START_AT =
