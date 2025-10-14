@@ -34,9 +34,9 @@ async function mine() {
       <img src="/images/error.png" alt="ERROR" class="hero" />
       <p class="msg">đã xảy ra lỗi, thử lại sau</p>
 
-      <a class="btn" href="https://t.me/your_admin" target="_blank">Báo Lỗi Cho Admin</a>
-      <a class="btn" href="https://t.me/your_announce" target="_blank">Tham Gia Kênh Thông Báo<br/>HTW COIN</a>
-      <a class="btn" href="https://t.me/your_chat" target="_blank">Tham Gia Nhóm Chat HTW COIN</a>
+      <a class="btn" href="https://t.me/HTW_Announcements" target="_blank">Báo Lỗi Cho Admin</a>
+      <a class="btn" href="https://t.me/HTW_Announcements" target="_blank">Tham Gia Kênh Thông Báo<br/>HTW COIN</a>
+      <a class="btn" href="https://t.me/HTW_Announcements" target="_blank">Tham Gia Nhóm Chat HTW COIN</a>
       <hr style="opacity:.2; margin:16px 0" />
     </div>
   </main>

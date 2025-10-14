@@ -8,6 +8,7 @@ import ErrorPage from './pages/Error.vue'
 import Swap from './pages/Swap.vue'
 import Withdraw from './pages/Withdraw.vue'
 import Wheel from './pages/Wheel.vue'
+import Jar from './pages/Jar.vue'
 import Checkin from './pages/Checkin.vue'
 import Admin from './pages/Admin.vue'
 import AdminWithdraws from './pages/AdminWithdraws.vue'
@@ -25,6 +26,7 @@ export default createRouter({
     { path: '/swap', name: 'swap', component: Swap },
     { path: '/withdraw', name: 'withdraw', component: Withdraw },
     { path: '/wheel', name: 'wheel', component: Wheel },
+    { path: '/jar', name: 'jar', component: Jar },
     { path: '/checkin', name: 'checkin', component: Checkin },
     { path: '/admin', name: 'admin', component: Admin },
     { path: '/admin/withdraws', name: 'admin-withdraw', component: AdminWithdraws },

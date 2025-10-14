@@ -9,8 +9,10 @@ const wheelRef = ref(null)
 
 const state = ref({
   cooldown: 1200,      // 20 phút mặc định (server có thể trả khác)
-  remaining: 0,       // giây còn lại để xem ad/quay
-  htw_balance: 0,     // số dư
+  remaining: 0,        // giây còn lại để xem ad/quay
+  htw_balance: 0,      // số dư
+  today: 0,            // NEW: hôm nay đã quay
+  limit: 50,           // NEW: giới hạn/ngày
 })
 const busy = ref(false)
 const loading = ref(true)
@@ -39,7 +41,7 @@ function loadRewardSdk () {
   })
 }
 
-// “Giống mining”: luôn buộc xem Reward trước khi quay
+// luôn buộc xem Reward trước khi quay
 async function showRewardAd () {
   if (!rewardBlockId) throw new Error('Thiếu VITE_ADSGRAM_WHEEL_REWARD_BLOCK_ID')
   await loadRewardSdk()
@@ -73,6 +75,8 @@ async function loadStatus () {
     state.value.cooldown    = Number(data.cooldown ?? state.value.cooldown)
     state.value.remaining   = Number(data.remaining ?? 0)
     state.value.htw_balance = Number(data.htw_balance ?? 0)
+    state.value.today       = Number(data.today ?? 0)                 // NEW
+    state.value.limit       = Number(data.daily_limit ?? state.value.limit) // NEW
     if (state.value.remaining > 0) startTicker()
   } catch (e) {
     console.error(e)
@@ -82,7 +86,7 @@ async function loadStatus () {
   }
 }
 
-/* ====== AUTO-SPIN SAU KHI XEM AD (không dùng vé) ====== */
+/* ====== AUTO-SPIN SAU KHI XEM AD ====== */
 const MIN_SPIN_MS = 1000
 
 async function spin () {
@@ -100,7 +104,7 @@ async function spin () {
     spinning.value = true
     wheelRef.value?.play?.()
 
-    // 3) Song song gọi server quyết định kết quả + cộng HTW
+    // 3) Server quyết định kết quả + cộng HTW
     const [_, server] = await Promise.all([
       new Promise(res => setTimeout(res, MIN_SPIN_MS)), // đảm bảo quay tối thiểu
       fetch('/api/wheel/spin', { method: 'POST', credentials: 'include' })
@@ -109,27 +113,30 @@ async function spin () {
     ])
 
     if (!server?.ok || server.data?.ok !== true) {
-      // thất bại/cooldown: dừng quay và hiển thị thông báo
-      wheelRef.value?.stop?.(0) // dừng lại (UI), không cộng thưởng
+      // thất bại/cooldown/daily-limit: dừng quay và hiển thị thông báo
+      wheelRef.value?.stop?.(0)
       const remain = Number(server?.data?.remaining ?? state.value.cooldown)
       state.value.remaining = remain
+      state.value.today = Number(server?.data?.today_count ?? state.value.today) // NEW
       startTicker()
-      msg.value = server?.data?.ok === false ? 'Chưa hết thời gian chờ.' : 'Quay thất bại.'
+      msg.value = server?.data?.ok === false
+        ? (state.value.today >= state.value.limit ? 'Hôm nay đã đủ 50 lần.' : 'Chưa hết thời gian chờ.')
+        : 'Quay thất bại.'
       return
     }
 
-    // an toàn & không làm lệch
-const idxRaw = Number(server.data.index)
-const idx = (Number.isFinite(idxRaw) && idxRaw >= 0 && idxRaw < prizes.length) ? idxRaw : 0
-wheelRef.value?.stop?.(idx)
+    // an toàn & không làm lệch index
+    const idxRaw = Number(server.data.index)
+    const idx = (Number.isFinite(idxRaw) && idxRaw >= 0 && idxRaw < prizes.length) ? idxRaw : 0
+    wheelRef.value?.stop?.(idx)
 
-
-    // cập nhật số dư + cooldown (nếu có)
+    // cập nhật số dư + cooldown + today
     state.value.htw_balance = Number(server.data.htw_balance ?? state.value.htw_balance)
     state.value.remaining   = Number(server.data.remaining ?? state.value.cooldown)
+    state.value.today       = Math.min(state.value.today + 1, state.value.limit) // NEW
     startTicker()
 
-    // chuẩn bị thông điệp để hiển thị KHI vòng quay dừng (@end)
+    // chuẩn bị thông điệp khi vòng quay dừng (@end)
     const add = Number(server.data.add ?? 0)
     pendingToast.value = add > 0 ? `+${add} HTW 🎉` : 'Hụt rồi, hẹn lần sau!'
   } catch (e) {
@@ -138,7 +145,6 @@ wheelRef.value?.stop?.(idx)
     msg.value = e?.message || 'Quay thất bại, thử lại sau.'
   } finally {
     busy.value = false
-    // mở khóa tránh spam
     setTimeout(() => { claimInProgress.value = false }, 1200)
   }
 }
@@ -157,28 +163,30 @@ function onEnd (prize) {
     return
   }
 
-  // fallback nếu không có pendingToast
+  // fallback
   const t = prize?.fonts?.[0]?.text || ''
   toast(t.includes('HTW') ? `Nhận ${t} 🎉` : 'Hụt rồi, hẹn lần sau!')
 }
 
-/* ====== countdown giống mining ====== */
+/* ====== countdown ====== */
 function startTicker () {
   stopTicker()
   timerId = setInterval(() => {
-    if (state.value.remaining > 0) {
-      state.value.remaining--
-    } else {
-      stopTicker()
-    }
+    if (state.value.remaining > 0) state.value.remaining--
+    else stopTicker()
   }, 1000)
 }
-function stopTicker () {
-  if (timerId) { clearInterval(timerId); timerId = null }
-}
+function stopTicker () { if (timerId) { clearInterval(timerId); timerId = null } }
+
 const canSpin = computed(() =>
-  !busy.value && !spinning.value && !claimInProgress.value && state.value.remaining <= 0 && !loading.value
+  !busy.value &&
+  !spinning.value &&
+  !claimInProgress.value &&
+  state.value.remaining <= 0 &&
+  !loading.value &&
+  state.value.today < state.value.limit // NEW: chặn khi đạt limit
 )
+
 function fmtTime (sec) {
   const m = String(Math.floor(sec / 60)).padStart(2, '0')
   const s = String(Math.floor(sec % 60)).padStart(2, '0')
@@ -225,9 +233,15 @@ onUnmounted(stopTicker)
           @end="onEnd"
         />
 
-        <div class="cooldown" v-if="state.remaining > 0">
-          <i class="bi bi-hourglass-split"></i>
-          Còn lại: <b>{{ fmtTime(state.remaining) }}</b>
+        <div class="cooldown">
+          <template v-if="state.remaining > 0">
+            <i class="bi bi-hourglass-split"></i>
+            Còn lại: <b>{{ fmtTime(state.remaining) }}</b>
+            <span class="mut"> • Hôm nay: {{ state.today }}/{{ state.limit }}</span>
+          </template>
+          <template v-else>
+            <span class="mut">Hôm nay: {{ state.today }}/{{ state.limit }}</span>
+          </template>
         </div>
 
         <button
@@ -237,7 +251,9 @@ onUnmounted(stopTicker)
         >
           <i v-if="busy || loading || loadingRewardSdk" class="bi bi-arrow-repeat spin"></i>
           <i v-else class="bi bi-play-circle"></i>
-          <span>{{ state.remaining > 0 ? 'Chưa thể quay' : 'Quay ngay' }}</span>
+          <span>
+            {{ state.today>=state.limit ? 'Đã đạt ' + state.limit + ' lần' : (state.remaining > 0 ? 'Chưa thể quay' : 'Quay ngay') }}
+          </span>
         </button>
 
         <p v-if="!rewardBlockId" class="note warn">
@@ -291,6 +307,7 @@ onUnmounted(stopTicker)
 /* wheel */
 .wheel{display:grid;place-items:center;gap:12px}
 .cooldown{display:flex;align-items:center;gap:8px;color:#9fb2d0;margin:6px 0 2px}
+.mut{color:var(--mut)}
 
 /* button */
 .btn{

@@ -1,8 +1,9 @@
 // /api/chest.js
 import { supa } from './_supa.js'
 
-const REWARD   = Number(process.env.CHEST_REWARD_HTW   ?? 5)     // HTW / mở rương
-const COOLDOWN = Number(process.env.CHEST_COOLDOWN_SEC ?? 1200)   // 20 phút
+const REWARD     = Number(process.env.CHEST_REWARD_HTW    ?? 5)      // HTW / mở rương
+const COOLDOWN   = Number(process.env.CHEST_COOLDOWN_SEC  ?? 1200)   // 20 phút
+const DAY_LIMIT  = Number(process.env.CHEST_DAILY_LIMIT   ?? 50)     // 50 lần/ngày
 
 function getUidFromCookie(req) {
   const m = (req.headers.cookie || '').match(/(?:^|;\s*)tg_uid=(\d+)/)
@@ -16,7 +17,7 @@ export default async function handler(req, res) {
     const tgUid = getUidFromCookie(req)
     if (!tgUid) return res.status(401).send('Unauthorized')
 
-    // ===== GET: Trạng thái CHest (riêng mining) =====
+    // ===== GET: Trạng thái chest =====
     if (req.method === 'GET') {
       const { data: user, error: e1 } = await supa
         .from('users')
@@ -29,6 +30,7 @@ export default async function handler(req, res) {
         return res.status(500).send('User not found')
       }
 
+      // Cooldown
       let remaining = 0
       if (user.last_chest_open) {
         const elapsed = (Date.now() - new Date(user.last_chest_open).getTime()) / 1000
@@ -49,45 +51,56 @@ export default async function handler(req, res) {
         }
       }
 
+      // Hôm nay đã mở bao nhiêu (để show x/50)
+      const today0 = new Date(new Date().toISOString().slice(0,10) + 'T00:00:00Z').toISOString()
+      const { count: todayCount = 0 } = await supa
+        .from('chest_claims')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', user.id)
+        .gte('opened_at', today0)
+
       return res.status(200).json({
         reward: REWARD,
         cooldown: COOLDOWN,
         remaining,
         htw_balance: Number(user.htw_balance ?? 0),
+        today: Number(todayCount || 0),   // NEW
+        daily_limit: DAY_LIMIT,           // NEW
       })
     }
 
-    // ===== POST: Mở rương (RPC riêng cho chest) =====
+    // ===== POST: Mở rương (có giới hạn/ngày) =====
     if (req.method === 'POST') {
-      const { data, error } = await supa.rpc('chest_open', {
+      const { data, error } = await supa.rpc('chest_open_with_limit', {
         p_uid: tgUid,
         p_reward: REWARD,
         p_cooldown_secs: COOLDOWN,
+        p_day_limit: DAY_LIMIT,
       })
 
       if (error) {
-        console.error('RPC chest_open error:', error)
+        console.error('RPC chest_open_with_limit error:', error)
         return res.status(500).json({ ok: false, error: 'Open chest failed' })
       }
 
       const result = Array.isArray(data) ? data[0] : data
       if (!result) {
-        console.error('No result from chest_open')
+        console.error('No result from chest_open_with_limit')
         return res.status(500).json({ ok: false, error: 'No result from procedure' })
       }
 
-      // RPC mình tạo trả { ok:boolean, remaining:int, new_htw:numeric }
-      // Nhưng map linh hoạt để hợp với pattern cũ (success/new_balance):
-      const ok          = (result.ok ?? result.success) === true
-      const wait        = Math.max(0, Number(result.remaining ?? COOLDOWN))
-      const newBalance  = Number(result.new_htw ?? result.new_balance ?? 0)
+      // RPC có thể trả ok hoặc success
+      const ok         = (result.ok ?? result.success) === true
+      const wait       = Math.max(0, Number(result.remaining ?? COOLDOWN))
+      const newBalance = Number(result.new_htw ?? result.new_balance ?? 0)
 
       if (!ok) {
-        res.setHeader('Retry-After', String(wait))
+        if (wait > 0) res.setHeader('Retry-After', String(wait))
         return res.status(200).json({
           ok: false,
           remaining: wait,
           htw_balance: newBalance,
+          today_count: Number(result.today_count ?? 0), // NEW
         })
       }
 
@@ -95,6 +108,7 @@ export default async function handler(req, res) {
         ok: true,
         htw_balance: newBalance,
         remaining: COOLDOWN,
+        today_count: Number(result.today_count ?? 0),   // NEW
       })
     }
 

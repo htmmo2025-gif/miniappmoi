@@ -8,6 +8,8 @@ const state = ref({
   cooldown: 1200,   // 20 phút
   remaining: 0,
   htw_balance: 0,
+  today: 0,         // NEW: hôm nay đã claim
+  limit: 50,        // NEW: giới hạn/ngày
 })
 
 const busy = ref(false)
@@ -17,7 +19,11 @@ const claimInProgress = ref(false)
 
 let timerId = null
 const canClaim = computed(() =>
-  !busy.value && !claimInProgress.value && state.value.remaining <= 0 && !loading.value
+  !busy.value &&
+  !claimInProgress.value &&
+  state.value.remaining <= 0 &&
+  !loading.value &&
+  state.value.today < state.value.limit // NEW: chặn khi đạt limit
 )
 
 /* ========= Reward Ad (Adsgram) cho Mining ========= */
@@ -63,10 +69,12 @@ async function loadStatus() {
     if (!r.ok) throw new Error(await r.text())
     const data = await r.json()
     state.value = {
-      reward: data.reward,
-      cooldown: data.cooldown,
-      remaining: data.remaining,
+      reward: Number(data.reward ?? state.value.reward),
+      cooldown: Number(data.cooldown ?? state.value.cooldown),
+      remaining: Number(data.remaining ?? 0),
       htw_balance: Number(data.htw_balance ?? 0),
+      today: Number(data.today ?? 0),                // NEW
+      limit: Number(data.daily_limit ?? 50),         // NEW
     }
     if (state.value.remaining > 0) startTicker()
   } catch (e) {
@@ -91,14 +99,18 @@ async function claim() {
     if (!r.ok || data?.ok !== true) {
       const remain = Number(data?.remaining ?? state.value.cooldown)
       state.value.remaining = remain
+      state.value.today = Number(data?.today_count ?? state.value.today) // NEW: cập nhật đếm ngày khi fail
       startTicker()
-      msg.value = data?.ok === false ? 'Chưa hết thời gian chờ.' : 'Claim thất bại.'
+      msg.value = data?.ok === false
+        ? (state.value.today >= state.value.limit ? 'Hôm nay đã đủ 50 lần.' : 'Chưa hết thời gian chờ.')
+        : 'Claim thất bại.'
       return
     }
 
     // OK
     state.value.htw_balance = Number(data.htw_balance ?? state.value.htw_balance)
     state.value.remaining = state.value.cooldown
+    state.value.today = Math.min(state.value.today + 1, state.value.limit) // NEW: tăng đếm ngày
     msg.value = `Nhận +${state.value.reward} HTW thành công!`
     startTicker()
   } catch (e) {
@@ -110,7 +122,7 @@ async function claim() {
 }
 
 /* ---------------- Chest (mở rương) + Monetag ---------------- */
-const chest = ref({ reward: 5, cooldown: 1200, remaining: 0 }) // 20 phút
+const chest = ref({ reward: 5, cooldown: 1200, remaining: 0, today: 0, limit: 50 }) // NEW: today/limit
 const chestBusy = ref(false)
 const chestLoading = ref(true)
 const chestMsg = ref('')
@@ -118,7 +130,11 @@ const chestClaimInProgress = ref(false)
 let chestTimerId = null
 
 const canOpenChest = computed(() =>
-  !chestBusy.value && !chestClaimInProgress.value && chest.value.remaining <= 0 && !chestLoading.value
+  !chestBusy.value &&
+  !chestClaimInProgress.value &&
+  chest.value.remaining <= 0 &&
+  !chestLoading.value &&
+  chest.value.today < chest.value.limit // NEW
 )
 
 const MONETAG_ZONE = String(import.meta.env.VITE_MONETAG_ZONE_ID || '')
@@ -196,6 +212,8 @@ async function loadChestStatus() {
       reward: Number(data.reward ?? chest.value.reward),
       cooldown: Number(data.cooldown ?? 1200),
       remaining: Number(data.remaining ?? 0),
+      today: Number(data.today ?? 0),                 // NEW
+      limit: Number(data.daily_limit ?? chest.value.limit), // NEW
     }
     if (chest.value.remaining > 0) startChestTicker()
   } catch (e) {
@@ -217,12 +235,16 @@ async function openChest() {
     if (!r.ok || data?.ok !== true) {
       const remain = Number(data?.remaining ?? chest.value.cooldown)
       chest.value.remaining = remain; startChestTicker()
-      chestMsg.value = data?.ok === false ? 'Chưa hết thời gian chờ rương.' : 'Mở rương thất bại.'
+      chest.value.today = Number(data?.today_count ?? chest.value.today) // NEW
+      chestMsg.value = data?.ok === false
+        ? (chest.value.today >= chest.value.limit ? 'Hôm nay đã đủ 50 lần.' : 'Chưa hết thời gian chờ rương.')
+        : 'Mở rương thất bại.'
       return
     }
 
     state.value.htw_balance = Number(data.htw_balance ?? state.value.htw_balance)
     chest.value.remaining = chest.value.cooldown
+    chest.value.today = Math.min(chest.value.today + 1, chest.value.limit) // NEW
     chestMsg.value = `Mở rương nhận +${chest.value.reward} HTW thành công!`
     startChestTicker()
   } catch (e) {
@@ -234,7 +256,7 @@ async function openChest() {
 }
 
 /* ---------------- NEW: Adsgram task (2 HTW, 10p, 10 lần/ngày) ---------------- */
-const ads = ref({ reward: 2, cooldown: 600, remaining: 0, today: 0, limit: 10 })
+const ads = ref({ reward: 1, cooldown: 600, remaining: 0, today: 0, limit: 10 })
 const adsBusy = ref(false)
 const adsMsg = ref('')
 let adsTimer = null
@@ -261,9 +283,7 @@ async function claimAds(){
   if (!canAds.value) return
   adsBusy.value = true; adsMsg.value=''
   try{
-    // Dùng chung Adsgram với Mining
     await showRewardAd().catch(err => { throw new Error(err?.message || 'Vui lòng xem hết quảng cáo để nhận thưởng.') })
-
     const r = await fetch('/api/watchadsgram', { method:'POST', credentials:'include', headers:{'content-type':'application/json'} })
     const j = await r.json().catch(()=> ({}))
     if (!r.ok || j?.ok!==true){
@@ -273,7 +293,6 @@ async function claimAds(){
       adsMsg.value = ads.value.today >= ads.value.limit ? 'Hôm nay đã đủ 10 lần.' : 'Hãy đợi đủ thời gian nhé.'
       return
     }
-    // OK
     ads.value.remaining = ads.value.cooldown
     ads.value.today = Math.min(ads.value.today + 1, ads.value.limit)
     state.value.htw_balance = Number(j?.new_balance ?? state.value.htw_balance)
@@ -287,7 +306,7 @@ async function claimAds(){
 }
 
 /* ---------------- NEW: Montag task (2 HTW, 10p, 10 lần/ngày) ---------------- */
-const mtg = ref({ reward: 2, cooldown: 600, remaining: 0, today: 0, limit: 10 })
+const mtg = ref({ reward: 1, cooldown: 600, remaining: 0, today: 0, limit: 10 })
 const mtgBusy = ref(false)
 const mtgMsg = ref('')
 let mtgTimer = null
@@ -314,9 +333,7 @@ async function claimMtg(){
   if (!canMtg.value) return
   mtgBusy.value = true; mtgMsg.value=''
   try{
-    // Dùng chung Monetag với Chest
     await showMonetagReward().catch(err => { throw new Error(err?.message || 'Vui lòng xem hết quảng cáo để nhận thưởng.') })
-
     const r = await fetch('/api/watchadsmontag', { method:'POST', credentials:'include', headers:{'content-type':'application/json'} })
     const j = await r.json().catch(()=> ({}))
     if (!r.ok || j?.ok!==true){
@@ -384,15 +401,23 @@ function fmtTime(sec) {
           </div>
         </div>
 
-        <div class="cooldown" v-if="state.remaining > 0">
-          <i class="bi bi-hourglass-split"></i>
-          Còn lại: <b>{{ fmtTime(state.remaining) }}</b>
+        <div class="cooldown">
+          <template v-if="state.remaining > 0">
+            <i class="bi bi-hourglass-split"></i>
+            Còn lại: <b>{{ fmtTime(state.remaining) }}</b>
+            <span class="mut"> • Hôm nay: {{ state.today }}/{{ state.limit }}</span>
+          </template>
+          <template v-else>
+            <span class="mut">Hôm nay: {{ state.today }}/{{ state.limit }}</span>
+          </template>
         </div>
 
         <button class="btn" :disabled="!canClaim || loading || loadingRewardSdk" @click="claim">
           <i v-if="busy || loading || loadingRewardSdk" class="bi bi-arrow-repeat spin"></i>
           <i v-else class="bi bi-box-arrow-in-down"></i>
-          <span>{{ state.remaining > 0 ? 'Chưa thể claim' : 'Claim +' + state.reward + ' HTW' }}</span>
+          <span>
+            {{ state.today>=state.limit ? 'Đã đạt ' + state.limit + ' lần' : (state.remaining > 0 ? 'Chưa thể claim' : 'Claim +' + state.reward + ' HTW') }}
+          </span>
         </button>
 
         <p v-if="!rewardBlockId" class="note warn">
@@ -414,15 +439,23 @@ function fmtTime(sec) {
           </div>
         </div>
 
-        <div class="cooldown" v-if="chest.remaining > 0">
-          <i class="bi bi-hourglass-split"></i>
-          Còn lại: <b>{{ fmtTime(chest.remaining) }}</b>
+        <div class="cooldown">
+          <template v-if="chest.remaining > 0">
+            <i class="bi bi-hourglass-split"></i>
+            Còn lại: <b>{{ fmtTime(chest.remaining) }}</b>
+            <span class="mut"> • Hôm nay: {{ chest.today }}/{{ chest.limit }}</span>
+          </template>
+          <template v-else>
+            <span class="mut">Hôm nay: {{ chest.today }}/{{ chest.limit }}</span>
+          </template>
         </div>
 
         <button class="btn" :disabled="!canOpenChest || chestLoading || loadingMonetagSdk" @click="openChest">
           <i v-if="chestBusy || chestLoading || loadingMonetagSdk" class="bi bi-arrow-repeat spin"></i>
           <i v-else class="bi bi-gift"></i>
-          <span>{{ chest.remaining > 0 ? 'Chưa thể mở rương' : 'Mở rương +' + chest.reward + ' HTW' }}</span>
+          <span>
+            {{ chest.today>=chest.limit ? 'Đã đạt ' + chest.limit + ' lần' : (chest.remaining > 0 ? 'Chưa thể mở rương' : 'Mở rương +' + chest.reward + ' HTW') }}
+          </span>
         </button>
 
         <p v-if="!MONETAG_SRC || !MONETAG_ZONE" class="note warn">
@@ -507,9 +540,9 @@ function fmtTime(sec) {
 .page{
   --bg:#0b0f1a; --card:#101826; --mut:#9aa3b2; --ring:1px solid rgba(148,163,184,.14);
   background:var(--bg); color:#e5e7eb;
-  width:100%;                 /* tránh overflow ngang */
-  min-height:100vh;           /* không khóa chiều cao, cho phép scroll */
-  overflow-y:auto;            /* cho phép cuộn */
+  width:100%;
+  min-height:100vh;
+  overflow-y:auto;
   -webkit-overflow-scrolling: touch;
 }
 .topbar{ position:sticky; top:0; z-index:10; padding-block:calc(10px + env(safe-area-inset-top)) 10px;
@@ -521,7 +554,7 @@ function fmtTime(sec) {
 .spacer{ flex:1 }
 
 .wrap{ width:100%; padding-top:12px;
-  padding-bottom:calc(88px + env(safe-area-inset-bottom));  /* chừa chỗ BottomNav */
+  padding-bottom:calc(88px + env(safe-area-inset-bottom));
   padding-left:max(16px, env(safe-area-inset-left)); padding-right:max(16px, env(safe-area-inset-right));
   display:grid; gap:14px }
 
@@ -541,7 +574,7 @@ function fmtTime(sec) {
 .box-lbl{ display:flex; align-items:center; gap:8px; color:#9aa3b2; font-size:12px }
 .box-val{ font:800 18px/1.1 ui-sans-serif,system-ui }
 
-.cooldown{ display:flex; align-items:center; gap:8px; color:#9fb2d0; margin:10px 0 }
+.cooldown{ display:flex; align-items:center; gap:8px; color:#9fb2d0; margin:10px 0; flex-wrap:wrap }
 .mut{ color:var(--mut) }
 
 .btn{ width:100%; padding:14px; border-radius:14px; border:none; color:#0b0f1a; font-weight:900;
