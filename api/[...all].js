@@ -14,6 +14,7 @@ import tgVerify from '../server/handlers/tg/verify.js'
 import adsgramRewardUrl  from '../server/handlers/adsgram/reward-url.js'
 import adsgramWebhook    from '../server/handlers/adsgram/reward-webhook.js'
 import taskAdsgramReward from '../server/handlers/tasks/adsgram-reward.js'
+import joinChannel from '../server/handlers/join-channel.js'
 
 // ===== others (mine/swap/wheel) =====
 import mine      from '../server/handlers/mine.js'
@@ -53,6 +54,7 @@ const routes = {
   'GET /api/adsgram/reward-url'      : adsgramRewardUrl,
   'POST /api/adsgram/reward-webhook' : adsgramWebhook,
   'POST /api/tasks/adsgram-reward'   : taskAdsgramReward,
+  'POST /api/join-channel': joinChannel,
 
   // game
   'GET /api/mine'       : mine,
