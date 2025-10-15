@@ -2,7 +2,7 @@
 import { supa } from './_supa.js'
 
 const COOLDOWN  = Number(process.env.WHEEL_COOLDOWN_SEC || process.env.ADSGRAM_WHEEL_REWARD_COOLDOWN || 1200)
-const DAY_LIMIT = Number(process.env.WHEEL_DAILY_LIMIT || 50)
+const DAY_LIMIT = Number(process.env.WHEEL_DAILY_LIMIT || 30)
 
 function getUid(req) {
   const m = (req.headers.cookie || '').match(/(?:^|;\s*)tg_uid=(\d+)/)

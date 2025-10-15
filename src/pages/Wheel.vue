@@ -12,7 +12,7 @@ const state = ref({
   remaining: 0,        // giây còn lại để xem ad/quay
   htw_balance: 0,      // số dư
   today: 0,            // NEW: hôm nay đã quay
-  limit: 50,           // NEW: giới hạn/ngày
+  limit: 30,           // NEW: giới hạn/ngày
 })
 const busy = ref(false)
 const loading = ref(true)
@@ -120,7 +120,7 @@ async function spin () {
       state.value.today = Number(server?.data?.today_count ?? state.value.today) // NEW
       startTicker()
       msg.value = server?.data?.ok === false
-        ? (state.value.today >= state.value.limit ? 'Hôm nay đã đủ 50 lần.' : 'Chưa hết thời gian chờ.')
+        ? (state.value.today >= state.value.limit ? 'Hôm nay đã đủ 30 lần.' : 'Chưa hết thời gian chờ.')
         : 'Quay thất bại.'
       return
     }

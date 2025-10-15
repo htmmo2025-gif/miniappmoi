@@ -9,7 +9,7 @@ const state = ref({
   remaining: 0,
   htw_balance: 0,
   today: 0,         // NEW: hôm nay đã claim
-  limit: 50,        // NEW: giới hạn/ngày
+  limit: 40,        // NEW: giới hạn/ngày
 })
 
 const busy = ref(false)
@@ -74,7 +74,7 @@ async function loadStatus() {
       remaining: Number(data.remaining ?? 0),
       htw_balance: Number(data.htw_balance ?? 0),
       today: Number(data.today ?? 0),                // NEW
-      limit: Number(data.daily_limit ?? 50),         // NEW
+      limit: Number(data.daily_limit ?? 40),         // NEW
     }
     if (state.value.remaining > 0) startTicker()
   } catch (e) {
@@ -102,7 +102,7 @@ async function claim() {
       state.value.today = Number(data?.today_count ?? state.value.today) // NEW: cập nhật đếm ngày khi fail
       startTicker()
       msg.value = data?.ok === false
-        ? (state.value.today >= state.value.limit ? 'Hôm nay đã đủ 50 lần.' : 'Chưa hết thời gian chờ.')
+        ? (state.value.today >= state.value.limit ? 'Hôm nay đã đủ 40 lần.' : 'Chưa hết thời gian chờ.')
         : 'Claim thất bại.'
       return
     }
@@ -122,7 +122,7 @@ async function claim() {
 }
 
 /* ---------------- Chest (mở rương) + Monetag ---------------- */
-const chest = ref({ reward: 5, cooldown: 1200, remaining: 0, today: 0, limit: 50 }) // NEW: today/limit
+const chest = ref({ reward: 5, cooldown: 1200, remaining: 0, today: 0, limit: 40 }) // NEW: today/limit
 const chestBusy = ref(false)
 const chestLoading = ref(true)
 const chestMsg = ref('')
@@ -237,7 +237,7 @@ async function openChest() {
       chest.value.remaining = remain; startChestTicker()
       chest.value.today = Number(data?.today_count ?? chest.value.today) // NEW
       chestMsg.value = data?.ok === false
-        ? (chest.value.today >= chest.value.limit ? 'Hôm nay đã đủ 50 lần.' : 'Chưa hết thời gian chờ rương.')
+        ? (chest.value.today >= chest.value.limit ? 'Hôm nay đã đủ 40 lần.' : 'Chưa hết thời gian chờ rương.')
         : 'Mở rương thất bại.'
       return
     }
