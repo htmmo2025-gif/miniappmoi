@@ -19,13 +19,16 @@ export default async function handler(req, res) {
     const tgUid = getUidFromCookie(req)
     if (!tgUid) return res.status(401).send('Unauthorized')
 
-    // Lấy user
+    // Lấy user (THÊM jar_ref_reset_at)
     const { data: user, error: uerr } = await supa
       .from('users')
-      .select('id, htw_balance, last_jar_open')
+      .select('id, htw_balance, last_jar_open, jar_ref_reset_at')
       .eq('telegram_id', tgUid)
       .single()
     if (uerr || !user) return res.status(500).send('User not found')
+
+    // mốc tính lượt = reset_at hoặc FEATURE_START_AT
+    const cutoffIso = (user.jar_ref_reset_at ?? FEATURE_START_AT)
 
     // helpers
     const now = Date.now()
@@ -65,12 +68,12 @@ export default async function handler(req, res) {
     // -------- GET: status ----------
     if (req.method === 'GET') {
       const remaining = await computeRemaining()
-      const [newRefs, opensSinceStart, opensToday] = await Promise.all([
-        countNewRefsSince(FEATURE_START_AT),
-        countOpensSince(FEATURE_START_AT),
+      const [newRefs, opensSinceCutoff, opensToday] = await Promise.all([
+        countNewRefsSince(cutoffIso),
+        countOpensSince(cutoffIso),
         countOpensSince(new Date(new Date().toISOString().slice(0,10) + 'T00:00:00Z').toISOString())
       ])
-      const opens_left = Math.max(0, newRefs - opensSinceStart)
+      const opens_left = Math.max(0, newRefs - opensSinceCutoff)
       return res.status(200).json({
         cooldown: COOLDOWN,
         remaining,
@@ -88,11 +91,11 @@ export default async function handler(req, res) {
         return res.status(200).json({ ok:false, error:'Cooldown', remaining })
       }
 
-      const [newRefs, opensSinceStart] = await Promise.all([
-        countNewRefsSince(FEATURE_START_AT),
-        countOpensSince(FEATURE_START_AT)
+      const [newRefs, opensSinceCutoff] = await Promise.all([
+        countNewRefsSince(cutoffIso),
+        countOpensSince(cutoffIso)
       ])
-      const opens_left = Math.max(0, newRefs - opensSinceStart)
+      const opens_left = Math.max(0, newRefs - opensSinceCutoff)
       if (opens_left <= 0) {
         return res.status(200).json({ ok:false, error:'Hết lượt mở', remaining:0, opens_left:0 })
       }
@@ -102,7 +105,8 @@ export default async function handler(req, res) {
         p_user_id: user.id,
         p_reward: reward,
         p_cooldown_secs: COOLDOWN,
-        p_feature_start: null,
+        // TRUYỀN MỐC XUỐNG RPC (function sẽ ưu tiên jar_ref_reset_at nếu có)
+        p_feature_start: cutoffIso,
       })
       if (error) {
         console.error('RPC jar_open_random error:', error)
