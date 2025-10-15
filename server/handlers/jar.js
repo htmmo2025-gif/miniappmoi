@@ -102,7 +102,7 @@ export default async function handler(req, res) {
         p_user_id: user.id,
         p_reward: reward,
         p_cooldown_secs: COOLDOWN,
-        p_feature_start: FEATURE_START_AT
+        p_feature_start: null,
       })
       if (error) {
         console.error('RPC jar_open_random error:', error)
