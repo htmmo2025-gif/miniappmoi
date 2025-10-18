@@ -6,51 +6,84 @@ const router = useRouter()
 const tg = window.Telegram?.WebApp
 
 const loadingText = ref('Đang khởi tạo...')
-const progress = ref(0)
+const progress    = ref(0)
 
-// các bước hiển thị progress
+// hiệu ứng tiến trình “giả lập”
 const loadingSteps = [
-  { text: 'Đang khởi tạo...', duration: 800 },
-  { text: 'Kết nối Telegram...', duration: 1000 },
-  { text: 'Xác thực người dùng...', duration: 1200 },
-  { text: 'Hoàn tất...', duration: 500 }
+  { text: 'Đang khởi tạo...',       duration: 800 },
+  { text: 'Kết nối Telegram...',     duration: 1000 },
+  { text: 'Xác thực người dùng...',  duration: 1200 },
+  { text: 'Hoàn tất...',             duration: 500 }
 ]
 
-async function simulateLoading() {
-  let currentProgress = 0
+async function simulateLoading () {
+  let current = 0
   for (let i = 0; i < loadingSteps.length; i++) {
-    const step = loadingSteps[i]
-    loadingText.value = step.text
+    const step   = loadingSteps[i]
     const target = ((i + 1) / loadingSteps.length) * 100
-    const stepDur = step.duration
-    const delta = (target - currentProgress) / (stepDur / 50)
-    while (currentProgress < target) {
+    const delta  = (target - current) / (step.duration / 50)
+    loadingText.value = step.text
+    while (current < target) {
       await new Promise(r => setTimeout(r, 50))
-      currentProgress = Math.min(currentProgress + delta, target)
-      progress.value = currentProgress
+      current = Math.min(current + delta, target)
+      progress.value = current
     }
   }
 }
 
-async function verifyTelegram() {
-  // initData dùng cho /api/tg/verify
+// Gọi /api/tg/verify để (1) xác thực initData, (2) upsert user, (3) set cookie tg_uid
+async function verifyTelegram () {
   const qs = new URLSearchParams(tg?.initData || '')
   try {
-    const ok = await fetch('/api/tg/verify?' + qs.toString(),{
-  credentials: 'include'   // <<< bắt buộc để nhận Set-Cookie từ server
-}).then(r => r.ok)
+    const ok = await fetch('/api/tg/verify?' + qs.toString(), {
+      credentials: 'include',          // nhận Set-Cookie tg_uid từ server
+      method: 'GET',
+    }).then(r => r.status === 204)
     return ok
   } catch {
     return false
   }
 }
 
-async function checkIsAdmin(tid) {
+// Lấy tid (Telegram ID) từ WebApp initData (dùng cho track-ip khi cookie chưa kịp có)
+function getTid () {
+  const fromUnsafe = tg?.initDataUnsafe?.user?.id
+  if (fromUnsafe) return String(fromUnsafe)
+  const qs = new URLSearchParams(tg?.initData || '')
+  // initData có cặp user=<json>; nếu cần, bạn có thể parse để lấy id
   try {
-    const r = await fetch('/api/admin/whoami?tid=' + encodeURIComponent(tid),{ credentials: 'include' })
+    const u = JSON.parse(qs.get('user') || '{}')
+    if (u?.id) return String(u.id)
+  } catch {}
+  return ''
+}
+
+// Ghi IP/UA vào bảng users thông qua API (cookie hoặc header X-Telegram-Id đều được)
+async function trackIp (tid) {
+  try {
+    await fetch('/api/track-ip', {
+      method: 'POST',
+      credentials: 'include',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Telegram-Id': String(tid || ''),
+      },
+      body: JSON.stringify({ tid })
+    })
+  } catch (e) {
+    console.warn('track-ip failed:', e)
+  }
+}
+
+// (tùy chọn) kiểm tra admin để điều hướng vào /admin
+async function checkIsAdmin (tid) {
+  try {
+    const r = await fetch('/api/admin/whoami?tid=' + encodeURIComponent(tid), {
+      credentials: 'include'
+    })
     if (!r.ok) return false
     const j = await r.json()
-    return !!j.is_admin
+    return !!j?.is_admin
   } catch {
     return false
   }
@@ -59,39 +92,41 @@ async function checkIsAdmin(tid) {
 onMounted(async () => {
   tg?.ready()
 
-  // chạy progress song song với verify
+  // chạy progress song song
   simulateLoading()
 
   const MIN_LOAD_MS = 3500
   const t0 = Date.now()
 
-  // 1) verify telegram signature
-  const ok = await verifyTelegram()
+  // 1) Verify
+  const verified = await verifyTelegram()
 
-  // 2) nếu ok -> hỏi server xem có phải admin không
-  let isAdmin = false
-  if (ok) {
-    const tid =
-      tg?.initDataUnsafe?.user?.id ||
-      new URLSearchParams(tg?.initData || '').get('user') ||
-      ''
-    isAdmin = await checkIsAdmin(String(tid))
+  // 2) Track IP/UA sau khi verify thành công
+  let tid = ''
+  if (verified) {
+    tid = getTid()
+    if (tid) await trackIp(tid)
   }
 
-  // đảm bảo tối thiểu MIN_LOAD_MS cho mượt
+  // 3) (tuỳ chọn) hỏi server xem có phải admin không
+  let isAdmin = false
+  if (verified && tid) {
+    isAdmin = await checkIsAdmin(tid)
+  }
+
+  // đảm bảo thời gian hiển thị tối thiểu cho mượt
   const elapsed = Date.now() - t0
   if (elapsed < MIN_LOAD_MS) {
     await new Promise(r => setTimeout(r, MIN_LOAD_MS - elapsed))
   }
 
-  // đẩy progress về 100% để mượt
+  // hoàn tất progress & điều hướng
   progress.value = 100
   loadingText.value = 'Hoàn tất...'
-
-  // điều hướng
-  router.replace(ok ? (isAdmin ? '/admin' : '/mining') : '/error')
+  router.replace(verified ? (isAdmin ? '/admin' : '/mining') : '/error')
 })
 </script>
+
 
 
 <template>

@@ -1,5 +1,5 @@
 // /api/[...all].js
-
+import trackIp from '../server/handlers/track-ip.js'
 // ===== user handlers =====
 import profile  from '../server/handlers/profile.js'
 import checkin  from '../server/handlers/checkin.js'
@@ -39,6 +39,7 @@ import adminSummary        from '../server/handlers/admin/summary.js'
 
 // ===== route map =====
 const routes = {
+  'POST /api/track-ip': trackIp,
   // user
   'GET /api/profile'   : profile,
   'GET /api/checkin'   : checkin,

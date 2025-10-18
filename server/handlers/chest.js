@@ -3,7 +3,7 @@ import { supa } from './_supa.js'
 
 const REWARD     = Number(process.env.CHEST_REWARD_HTW    ?? 5)      // HTW / mở rương
 const COOLDOWN   = Number(process.env.CHEST_COOLDOWN_SEC  ?? 1200)   // 20 phút
-const DAY_LIMIT  = Number(process.env.CHEST_DAILY_LIMIT   ?? 40)     // 50 lần/ngày
+const DAY_LIMIT  = Number(process.env.CHEST_DAILY_LIMIT   ?? 40)     // 40 lần/ngày
 
 function getUidFromCookie(req) {
   const m = (req.headers.cookie || '').match(/(?:^|;\s*)tg_uid=(\d+)/)
@@ -71,46 +71,46 @@ export default async function handler(req, res) {
 
     // ===== POST: Mở rương (có giới hạn/ngày) =====
     if (req.method === 'POST') {
-      const { data, error } = await supa.rpc('chest_open_with_limit', {
+      const { data, error } = await supa.rpc('chest_open', {
         p_uid: tgUid,
-        p_reward: REWARD,
-        p_cooldown_secs: COOLDOWN,
-        p_day_limit: DAY_LIMIT,
-      })
+        p_reward: REWARD,           // numeric
+        p_cooldown_secs: COOLDOWN,  // integer
+        p_day_limit: DAY_LIMIT,     // 40
+      });
 
       if (error) {
-        console.error('RPC chest_open_with_limit error:', error)
-        return res.status(500).json({ ok: false, error: 'Open chest failed' })
+        console.error('RPC chest_open error:', error);
+        return res.status(500).json({ ok: false, error: 'Open chest failed' });
       }
 
-      const result = Array.isArray(data) ? data[0] : data
-      if (!result) {
-        console.error('No result from chest_open_with_limit')
-        return res.status(500).json({ ok: false, error: 'No result from procedure' })
-      }
+      const result = Array.isArray(data) ? data[0] : data;
+  if (!result) {
+    console.error('No result from chest_open');
+    return res.status(500).json({ ok: false, error: 'No result from procedure' });
+  }
 
       // RPC có thể trả ok hoặc success
-      const ok         = (result.ok ?? result.success) === true
-      const wait       = Math.max(0, Number(result.remaining ?? COOLDOWN))
-      const newBalance = Number(result.new_htw ?? result.new_balance ?? 0)
+      const ok         = (result.ok ?? result.success) === true;
+  const wait       = Math.max(0, Number(result.remaining ?? COOLDOWN));
+  const newBalance = Number(result.new_htw ?? result.new_balance ?? 0);
 
-      if (!ok) {
-        if (wait > 0) res.setHeader('Retry-After', String(wait))
-        return res.status(200).json({
-          ok: false,
-          remaining: wait,
-          htw_balance: newBalance,
-          today_count: Number(result.today_count ?? 0), // NEW
-        })
-      }
+  if (!ok) {
+    if (wait > 0) res.setHeader('Retry-After', String(wait));
+    return res.status(200).json({
+      ok: false,
+      remaining: wait,
+      htw_balance: newBalance,
+      today_count: Number(result.today_count ?? 0),
+    });
+  }
 
-      return res.status(200).json({
-        ok: true,
-        htw_balance: newBalance,
-        remaining: COOLDOWN,
-        today_count: Number(result.today_count ?? 0),   // NEW
-      })
-    }
+  return res.status(200).json({
+    ok: true,
+    htw_balance: newBalance,
+    remaining: COOLDOWN,
+    today_count: Number(result.today_count ?? 0),
+  });
+}
 
     return res.status(405).send('Method not allowed')
   } catch (e) {

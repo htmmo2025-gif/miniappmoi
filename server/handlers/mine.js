@@ -1,9 +1,9 @@
 // /api/mine.js
 import { supa } from './_supa.js'
 
-const REWARD     = Number(process.env.MINING_REWARD_HTW   ?? 5)      // HTW / claim
-const COOLDOWN   = Number(process.env.MINING_COOLDOWN_SEC ?? 1200)   // 20 phút
-const DAY_LIMIT  = Number(process.env.MINING_DAILY_LIMIT  ?? 40)     // 40 lần/ngày
+const REWARD    = Number(process.env.MINING_REWARD_HTW   ?? 5)      // HTW / claim
+const COOLDOWN  = Number(process.env.MINING_COOLDOWN_SEC ?? 1200)   // 20 phút
+const DAY_LIMIT = Number(process.env.MINING_DAILY_LIMIT  ?? 40)     // 40 lần/ngày
 
 function getUidFromCookie(req) {
   const m = (req.headers.cookie || '').match(/(?:^|;\s*)tg_uid=(\d+)/)
@@ -48,7 +48,7 @@ export default async function handler(req, res) {
         }
       }
 
-      // Đếm hôm nay để show x/50
+      // Đếm hôm nay để show x/40
       const today0 = new Date(new Date().toISOString().slice(0,10) + 'T00:00:00Z').toISOString()
       const { count: todayCount = 0 } = await supa
         .from('mining_claims')
@@ -61,50 +61,52 @@ export default async function handler(req, res) {
         cooldown: COOLDOWN,
         remaining,
         htw_balance: Number(user.htw_balance ?? 0),
-        today: Number(todayCount || 0),   // NEW
-        daily_limit: DAY_LIMIT,           // NEW
+        today: Number(todayCount || 0),
+        daily_limit: DAY_LIMIT,
       })
     }
 
-    // ===== POST: Claim (có giới hạn/ngày) =====
+    // ===== POST: Claim (limit/ngày xử lý bên DB trong mining_claim) =====
     if (req.method === 'POST') {
-      const { data, error } = await supa.rpc('mining_claim_with_limit', {
-        p_uid: tgUid,                   // Telegram ID
+      const { data, error } = await supa.rpc('mining_claim', {
+        p_uid: tgUid,
         p_reward: REWARD,
         p_cooldown_secs: COOLDOWN,
         p_day_limit: DAY_LIMIT,
       })
 
       if (error) {
-        console.error('RPC mining_claim_with_limit error:', error)
+        console.error('RPC mining_claim error:', error)
         return res.status(500).json({ ok: false, error: 'Claim failed' })
       }
 
       const result = Array.isArray(data) ? data[0] : data
       if (!result) {
-        console.error('No result from mining_claim_with_limit')
+        console.error('No result from mining_claim')
         return res.status(500).json({ ok: false, error: 'No result from procedure' })
       }
 
-      // Hỗ trợ cả trường hợp function cũ trả success thay vì ok
-      const ok = (result.ok ?? result.success) === true
+      // Hỗ trợ cả field tên khác nhau giữa các phiên bản function
+      const ok         = (result.ok ?? result.success) === true
+      const wait       = Math.max(0, Number(result.remaining ?? COOLDOWN))
+      const newBalance = Number(result.new_htw ?? result.new_balance ?? 0)
+      const todayCount = Number(result.today_count ?? 0)
 
       if (!ok) {
-        const wait = Math.max(0, Number(result.remaining ?? COOLDOWN))
         if (wait > 0) res.setHeader('Retry-After', String(wait))
         return res.status(200).json({
           ok: false,
           remaining: wait,
-          htw_balance: Number(result.new_balance ?? 0),
-          today_count: Number(result.today_count ?? 0), // NEW
+          htw_balance: newBalance,
+          today_count: todayCount,
         })
       }
 
       return res.status(200).json({
         ok: true,
-        htw_balance: Number(result.new_balance ?? 0),
+        htw_balance: newBalance,
         remaining: COOLDOWN,
-        today_count: Number(result.today_count ?? 0),   // NEW
+        today_count: todayCount,
       })
     }
 
