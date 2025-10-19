@@ -27,8 +27,7 @@ import watchAdsgram   from '../server/handlers/watchadsgram.js'
 import watchAdsMontag from '../server/handlers/watchadsmontag.js'
 
 // ===== wheel =====
-import wheelStatus from '../server/handlers/wheel.js'
-import wheelSpin   from '../server/handlers/wheel/spin.js'
+import wheel from '../server/handlers/wheel.js'
 
 // ===== admin =====
 import adminWhoami         from '../server/handlers/admin/whoami.js'
@@ -71,8 +70,8 @@ const routes = {
   'POST /api/watchadsmontag' : watchAdsMontag,
 
   // Wheel
-  'GET /api/wheel'       : wheelStatus,
-  'POST /api/wheel/spin' : wheelSpin,
+  'GET /api/wheel'       : wheel,
+  'POST /api/wheel' : wheel,
   'GET /api/jar'  : jar,
   'POST /api/jar' : jar,
 
