@@ -264,5 +264,68 @@ onUnmounted(stopTicker)
 </template>
 
 <style scoped>
-/* (giữ nguyên phần style của bạn) */
+.page{
+  --bg:#0b0f1a; --card:#101826; --mut:#9aa3b2; --ring:1px solid rgba(148,163,184,.14);
+  background:var(--bg); color:#e5e7eb; min-height:100dvh;
+}
+.topbar{
+  position: sticky; top: 0; z-index: 10;
+  padding: 14px 16px;
+  background: linear-gradient(180deg, rgba(11,15,26,.96), rgba(11,15,26,.7) 65%, transparent);
+  backdrop-filter: blur(8px);
+}
+.topbar h1{margin:0; font:800 20px/1 ui-sans-serif,system-ui}
+.wrap{padding:16px 16px calc(92px + env(safe-area-inset-bottom))}
+
+.card{
+  background:var(--card); border:var(--ring); border-radius:16px; padding:18px;
+  box-shadow:0 10px 30px rgba(2,8,23,.35)
+}
+.card.center{display:grid;place-items:center;gap:10px;padding:28px}
+.big{font-size:38px}
+
+/* hero */
+.hero{display:flex; gap:12px; align-items:center}
+.hero-ic{
+  width:44px;height:44px;border-radius:12px;
+  background:linear-gradient(145deg,#06b6d4,#2563eb);
+  display:grid;place-items:center
+}
+.hero-t .label{font-size:12px;color:var(--mut)}
+.hero-t .amount{font:800 22px/1.1 ui-sans-serif,system-ui}
+.hero-t .amount span{font:700 12px; opacity:.85; margin-left:6px}
+
+/* wheel */
+.wheel{display:grid;place-items:center;gap:12px}
+.cooldown{display:flex;align-items:center;gap:8px;color:#9fb2d0;margin:6px 0 2px}
+.mut{color:var(--mut)}
+
+/* button */
+.btn{
+  width:100%; padding:14px; border-radius:14px; border:none; color:#0b0f1a; font-weight:900;
+  background:linear-gradient(145deg,#fde68a,#60a5fa);
+  display:flex; align-items:center; justify-content:center; gap:8px;
+  transition: opacity .2s;
+}
+.btn:disabled{opacity:.5; cursor:not-allowed;}
+.btn:not(:disabled):active{opacity:.85}
+
+.note{
+  margin-top:10px; padding:10px 12px; border-radius:10px;
+  background:#0e1525; color:#cbd5e1; font-size:13px;
+}
+.note.warn{background:#422006; color:#fed7aa; border:1px solid #92400e}
+
+.spin{animation:spin 1s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* toast */
+:global(.toast){
+  position: fixed; top: calc(64px + env(safe-area-inset-top)); left: 50%;
+  transform: translateX(-50%) translateY(-10px);
+  background: linear-gradient(135deg,#22c55e,#10b981); color:#0b0f1a;
+  padding: 10px 14px; border-radius: 12px; font-weight: 800; font-size: 13px;
+  box-shadow: 0 10px 30px rgba(16,185,129,.35); opacity: 0; z-index: 1000; transition: transform .2s, opacity .2s
+}
+:global(.toast.show){ opacity:1; transform: translateX(-50%) translateY(0) }
 </style>
