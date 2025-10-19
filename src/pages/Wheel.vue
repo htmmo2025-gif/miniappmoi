@@ -8,11 +8,11 @@ import { LuckyWheel } from '@lucky-canvas/vue'
 const wheelRef = ref(null)
 
 const state = ref({
-  cooldown: 1200,      // 20 phút mặc định (server có thể trả khác)
-  remaining: 0,        // giây còn lại để xem ad/quay
-  htw_balance: 0,      // số dư
-  today: 0,            // NEW: hôm nay đã quay
-  limit: 30,           // NEW: giới hạn/ngày
+  cooldown: 1200,   // 20 phút mặc định (server có thể trả khác)
+  remaining: 0,     // giây còn lại để xem ad/quay
+  htw_balance: 0,   // số dư
+  today: 0,         // hôm nay đã quay
+  limit: 30,        // giới hạn/ngày
 })
 const busy = ref(false)
 const loading = ref(true)
@@ -50,15 +50,13 @@ async function showRewardAd () {
   await ctrl.show() // resolve khi người dùng đã xem xong
 }
 
-/* ====== WHEEL UI ====== */
+/* ====== WHEEL UI (4 ô: +2, +3, +4, +5) ====== */
 const blocks = [{ padding: '12px', background: '#0f172a' }]
 const prizes = [
-  { background: '#0ea5e9', fonts: [{ text: '+2 HTW',  top: '18px' }] },
-  { background: '#f59e0b', fonts: [{ text: '+3 HTW',  top: '18px' }] },
-  { background: '#10b981', fonts: [{ text: '+4 HTW',  top: '18px' }] },
-  { background: '#8b5cf6', fonts: [{ text: '+5 HTW',  top: '18px' }] },
-  { background: '#ef4444', fonts: [{ text: '+1 HTW',  top: '18px' }] },
-  { background: '#22c55e', fonts: [{ text: '+6 HTW', top: '18px' }] },
+  { background: '#0ea5e9', fonts: [{ text: '+2 HTW', top: '18px' }] },
+  { background: '#f59e0b', fonts: [{ text: '+3 HTW', top: '18px' }] },
+  { background: '#10b981', fonts: [{ text: '+4 HTW', top: '18px' }] },
+  { background: '#8b5cf6', fonts: [{ text: '+5 HTW', top: '18px' }] },
 ]
 const buttons = [
   { radius: '40px', background: '#2563eb', pointer: true, fonts: [{ text: 'SPIN', top: '-18px' }] }
@@ -75,8 +73,8 @@ async function loadStatus () {
     state.value.cooldown    = Number(data.cooldown ?? state.value.cooldown)
     state.value.remaining   = Number(data.remaining ?? 0)
     state.value.htw_balance = Number(data.htw_balance ?? 0)
-    state.value.today       = Number(data.today ?? 0)                 // NEW
-    state.value.limit       = Number(data.daily_limit ?? state.value.limit) // NEW
+    state.value.today       = Number(data.today ?? 0)
+    state.value.limit       = Number(data.daily_limit ?? state.value.limit)
     if (state.value.remaining > 0) startTicker()
   } catch (e) {
     console.error(e)
@@ -117,7 +115,7 @@ async function spin () {
       wheelRef.value?.stop?.(0)
       const remain = Number(server?.data?.remaining ?? state.value.cooldown)
       state.value.remaining = remain
-      state.value.today = Number(server?.data?.today_count ?? state.value.today) // NEW
+      state.value.today = Number(server?.data?.today_count ?? state.value.today)
       startTicker()
       msg.value = server?.data?.ok === false
         ? (state.value.today >= state.value.limit ? 'Hôm nay đã đủ 30 lần.' : 'Chưa hết thời gian chờ.')
@@ -133,7 +131,7 @@ async function spin () {
     // cập nhật số dư + cooldown + today
     state.value.htw_balance = Number(server.data.htw_balance ?? state.value.htw_balance)
     state.value.remaining   = Number(server.data.remaining ?? state.value.cooldown)
-    state.value.today       = Math.min(state.value.today + 1, state.value.limit) // NEW
+    state.value.today       = Math.min(state.value.today + 1, state.value.limit)
     startTicker()
 
     // chuẩn bị thông điệp khi vòng quay dừng (@end)
@@ -184,7 +182,7 @@ const canSpin = computed(() =>
   !claimInProgress.value &&
   state.value.remaining <= 0 &&
   !loading.value &&
-  state.value.today < state.value.limit // NEW: chặn khi đạt limit
+  state.value.today < state.value.limit
 )
 
 function fmtTime (sec) {
