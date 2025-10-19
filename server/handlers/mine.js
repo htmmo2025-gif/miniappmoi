@@ -1,7 +1,7 @@
 // /api/mine.js
 import { supa } from './_supa.js'
 
-const REWARD    = Number(process.env.MINING_REWARD_HTW   ?? 5)      // HTW / claim
+const REWARD    = Number(process.env.MINING_REWARD_HTW   ?? 7)      // HTW / claim
 const COOLDOWN  = Number(process.env.MINING_COOLDOWN_SEC ?? 1200)   // 20 phút
 const DAY_LIMIT = Number(process.env.MINING_DAILY_LIMIT  ?? 40)     // 40 lần/ngày
 

@@ -4,7 +4,7 @@ import BottomNav from '../components/BottomNav.vue'
 
 /* ---------------- Mining (hiện có) ---------------- */
 const state = ref({
-  reward: 5,        // HTW/ lần đào
+  reward: 7,        // HTW/ lần đào
   cooldown: 1200,   // 20 phút
   remaining: 0,
   htw_balance: 0,
@@ -122,7 +122,7 @@ async function claim() {
 }
 
 /* ---------------- Chest (mở rương) + Monetag ---------------- */
-const chest = ref({ reward: 5, cooldown: 1200, remaining: 0, today: 0, limit: 40 }) // NEW: today/limit
+const chest = ref({ reward: 7, cooldown: 1200, remaining: 0, today: 0, limit: 40 }) // NEW: today/limit
 const chestBusy = ref(false)
 const chestLoading = ref(true)
 const chestMsg = ref('')
