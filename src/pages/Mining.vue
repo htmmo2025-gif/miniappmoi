@@ -260,13 +260,16 @@ const ads = ref({ reward: 1, cooldown: 600, remaining: 0, today: 0, limit: 10 })
 const adsBusy = ref(false)
 const adsMsg = ref('')
 let adsTimer = null
-const canAds = computed(() => !adsBusy.value && ads.value.remaining <= 0 && ads.value.today < ads.value.limit)
-
+const canAds = computed(() =>
+  !adsBusy.value && !adsLoading.value &&
+  ads.value.remaining <= 0 && ads.value.today < ads.value.limit
+)
 function startAdsTicker(){ stopAdsTicker(); adsTimer=setInterval(()=>{ if(ads.value.remaining>0) ads.value.remaining--; else stopAdsTicker() },1000) }
 function stopAdsTicker(){ if(adsTimer){ clearInterval(adsTimer); adsTimer=null } }
 
 async function loadAdsStatus(){
-  try{
+  adsLoading.value = true
+  try {
     const r = await fetch('/api/watchadsgram', { credentials:'include' })
     if (r.ok){
       const j = await r.json()
@@ -277,7 +280,9 @@ async function loadAdsStatus(){
       ads.value.limit     = Number(j?.daily_limit ?? j?.limit ?? 10)
       if (ads.value.remaining>0) startAdsTicker()
     }
-  }catch{}
+  } finally {
+    adsLoading.value = false
+  }
 }
 async function claimAds(){
   if (!canAds.value) return
@@ -306,17 +311,25 @@ async function claimAds(){
 }
 
 /* ---------------- NEW: Montag task (2 HTW, 10p, 10 lần/ngày) ---------------- */
+// Adsgram
+const adsLoading = ref(true)
+// Montag
+const mtgLoading = ref(true)
+
 const mtg = ref({ reward: 1, cooldown: 600, remaining: 0, today: 0, limit: 10 })
 const mtgBusy = ref(false)
 const mtgMsg = ref('')
 let mtgTimer = null
-const canMtg = computed(() => !mtgBusy.value && mtg.value.remaining <= 0 && mtg.value.today < mtg.value.limit)
-
+const canMtg = computed(() =>
+  !mtgBusy.value && !mtgLoading.value &&
+  mtg.value.remaining <= 0 && mtg.value.today < mtg.value.limit
+)
 function startMtgTicker(){ stopMtgTicker(); mtgTimer=setInterval(()=>{ if(mtg.value.remaining>0) mtg.value.remaining--; else stopMtgTicker() },1000) }
 function stopMtgTicker(){ if(mtgTimer){ clearInterval(mtgTimer); mtgTimer=null } }
 
 async function loadMtgStatus(){
-  try{
+  mtgLoading.value = true
+  try {
     const r = await fetch('/api/watchadsmontag', { credentials:'include' })
     if (r.ok){
       const j = await r.json()
@@ -327,7 +340,9 @@ async function loadMtgStatus(){
       mtg.value.limit     = Number(j?.daily_limit ?? j?.limit ?? 10)
       if (mtg.value.remaining>0) startMtgTicker()
     }
-  }catch{}
+  } finally {
+    mtgLoading.value = false
+  }
 }
 async function claimMtg(){
   if (!canMtg.value) return
@@ -486,11 +501,11 @@ function fmtTime(sec) {
           <span class="mut">Hôm nay: {{ ads.today }}/{{ ads.limit }}</span>
         </div>
 
-        <button class="btn" :disabled="!canAds" @click="claimAds">
-          <i v-if="adsBusy" class="bi bi-arrow-repeat spin"></i>
-          <i v-else class="bi bi-play-circle"></i>
-          <span>{{ ads.today>=ads.limit ? 'Đã đạt 10 lần' : (ads.remaining>0 ? 'Chưa thể nhận' : 'Xem + nhận ' + ads.reward + ' HTW') }}</span>
-        </button>
+        <button class="btn" :disabled="!canAds || adsLoading" @click="claimAds">
+  <i v-if="adsBusy || adsLoading" class="bi bi-arrow-repeat spin"></i>
+  <i v-else class="bi bi-play-circle"></i>
+  <span>{{ ads.today>=ads.limit ? 'Đã đạt 10 lần' : (ads.remaining>0 ? 'Chưa thể nhận' : 'Xem + nhận ' + ads.reward + ' HTW') }}</span>
+</button>
 
         <p v-if="adsMsg" class="note" :class="{ success: adsMsg.startsWith('+') }">{{ adsMsg }}</p>
       </section>
@@ -517,16 +532,17 @@ function fmtTime(sec) {
           <span class="mut">Hôm nay: {{ mtg.today }}/{{ mtg.limit }}</span>
         </div>
 
-        <button class="btn" :disabled="!canMtg" @click="claimMtg">
-          <i v-if="mtgBusy" class="bi bi-arrow-repeat spin"></i>
-          <i v-else class="bi bi-play-circle"></i>
-          <span>{{ mtg.today>=mtg.limit ? 'Đã đạt 10 lần' : (mtg.remaining>0 ? 'Chưa thể nhận' : 'Xem + nhận ' + mtg.reward + ' HTW') }}</span>
-        </button>
+        <!-- Montag -->
+<button class="btn" :disabled="!canMtg || mtgLoading" @click="claimMtg">
+  <i v-if="mtgBusy || mtgLoading" class="bi bi-arrow-repeat spin"></i>
+  <i v-else class="bi bi-play-circle"></i>
+  <span>{{ mtg.today>=mtg.limit ? 'Đã đạt 10 lần' : (mtg.remaining>0 ? 'Chưa thể nhận' : 'Xem + nhận ' + mtg.reward + ' HTW') }}</span>
+</button>
 
         <p v-if="mtgMsg" class="note" :class="{ success: mtgMsg.startsWith('+') }">{{ mtgMsg }}</p>
       </section>
 
-      <section v-if="loading || chestLoading" class="card center">
+      <section v-if="loading || chestLoading || adsLoading || mtgLoading" class="card center">
         <i class="bi bi-hourglass-split big spin"></i>
         <div>Đang tải…</div>
       </section>
