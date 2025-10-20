@@ -12,7 +12,7 @@ const state = ref({
   remaining: 0,     // giây còn lại để xem ad/quay
   htw_balance: 0,   // số dư
   today: 0,         // hôm nay đã quay
-  limit: 30,        // giới hạn/ngày
+  limit: 10,        // giới hạn/ngày
 })
 const busy = ref(false)
 const loading = ref(true)
