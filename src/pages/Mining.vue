@@ -4,7 +4,7 @@ import BottomNav from '../components/BottomNav.vue'
 
 /* ---------------- Mining (hiện có) ---------------- */
 const state = ref({
-  reward: 7,        // HTW/ lần đào
+  reward: 14,        // HTW/ lần đào
   cooldown: 1200,   // 20 phút
   remaining: 0,
   htw_balance: 0,
@@ -122,7 +122,7 @@ async function claim() {
 }
 
 /* ---------------- Chest (mở rương) + Monetag ---------------- */
-const chest = ref({ reward: 7, cooldown: 1200, remaining: 0, today: 0, limit: 40 }) // NEW: today/limit
+const chest = ref({ reward: 14, cooldown: 1200, remaining: 0, today: 0, limit: 40 }) // NEW: today/limit
 const chestBusy = ref(false)
 const chestLoading = ref(true)
 const chestMsg = ref('')
@@ -407,7 +407,7 @@ function fmtTime(sec) {
       <section class="card">
         <div class="row">
           <div class="box">
-            <div class="box-lbl"><i class="bi bi-gem"></i> Phần thưởng</div>
+            <div class="box-lbl"><i class="bi bi-gem"></i> Phần thưởng x2 ngày 20/10</div>
             <div class="box-val">+{{ state.reward }} HTW</div>
           </div>
           <div class="box">
@@ -445,7 +445,7 @@ function fmtTime(sec) {
       <section class="card">
         <div class="row">
           <div class="box">
-            <div class="box-lbl"><i class="bi bi-gift"></i> Phần thưởng</div>
+            <div class="box-lbl"><i class="bi bi-gift"></i> Phần thưởng x2 ngày 20/10</div>
             <div class="box-val">+{{ chest.reward }} HTW</div>
           </div>
           <div class="box">

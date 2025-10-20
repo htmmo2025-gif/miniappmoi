@@ -3,7 +3,7 @@ import crypto from 'node:crypto'
 import { supa } from '../_supa.js'
 
 const BOT_TOKEN = process.env.BOT_TOKEN
-const REF_BONUS = Number(process.env.REFERRAL_INVITE_BONUS ?? 50) // mức thưởng mời F1
+const REF_BONUS = Number(process.env.REFERRAL_INVITE_BONUS ?? 100) // mức thưởng mời F1
 
 function isValid(initData) {
   const hash = initData.get('hash')
