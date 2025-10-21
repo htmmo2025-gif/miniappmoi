@@ -89,7 +89,7 @@ onMounted(() => {
       <section class="card">
         <div class="title">
           <i class="bi bi-people-fill"></i>
-          Mời bạn bè nhận 100 HTW x 2 ngày 20/10 và 5% hoa hồng
+          Mời bạn bè nhận 50 HTW và 5% hoa hồng
         </div>
 
         <div class="invite-box">
