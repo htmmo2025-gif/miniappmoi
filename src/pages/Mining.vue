@@ -4,7 +4,7 @@ import BottomNav from '../components/BottomNav.vue'
 
 /* ---------------- Mining (hiện có) ---------------- */
 const state = ref({
-  reward: 7,        // HTW/ lần đào
+  reward: 5,        // HTW/ lần đào
   cooldown: 1200,   // 20 phút
   remaining: 0,
   htw_balance: 0,
