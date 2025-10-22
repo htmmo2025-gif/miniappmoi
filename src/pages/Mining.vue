@@ -83,7 +83,46 @@ async function loadStatus() {
 }
 
 async function claim() {
-  if (!canClaim.value || claimInProgres5, cooldown: 1200, remaining: 0, today: 0, limit: 30 }) // NEW: today/limit
+  if (!canClaim.value || claimInProgress.value) return
+  claimInProgress.value = true
+  busy.value = true
+  msg.value = ''
+
+  try {
+    // buộc xem quảng cáo (Adsgram)
+    await showRewardAd().catch((e) => { throw new Error(e?.message || 'Vui lòng xem quảng cáo để claim.') })
+
+    // gọi API claim mining
+    const r = await fetch('/api/mine', { method: 'POST', credentials: 'include' })
+    const data = await r.json().catch(() => ({}))
+
+    if (!r.ok || data?.ok !== true) {
+      const remain = Number(data?.remaining ?? state.value.cooldown)
+      state.value.remaining = remain
+      state.value.today = Number(data?.today_count ?? state.value.today) // NEW: cập nhật đếm ngày khi fail
+      startTicker()
+      msg.value = data?.ok === false
+        ? (state.value.today >= state.value.limit ? 'Hôm nay đã đủ 30 lần.' : 'Chưa hết thời gian chờ.')
+        : 'Claim thất bại.'
+      return
+    }
+
+    // OK
+    state.value.htw_balance = Number(data.htw_balance ?? state.value.htw_balance)
+    state.value.remaining = state.value.cooldown
+    state.value.today = Math.min(state.value.today + 1, state.value.limit) // NEW: tăng đếm ngày
+    msg.value = `Nhận +${state.value.reward} HTW thành công!`
+    startTicker()
+  } catch (e) {
+    console.error(e); msg.value = e?.message || 'Claim thất bại, thử lại sau.'
+  } finally {
+    busy.value = false
+    setTimeout(() => { claimInProgress.value = false }, 2000)
+  }
+}
+
+/* ---------------- Chest (mở rương) + Monetag ---------------- */
+const chest = ref({ reward: 5, cooldown: 1200, remaining: 0, today: 0, limit: 30 }) // NEW: today/limit
 const chestBusy = ref(false)
 const chestLoading = ref(true)
 const chestMsg = ref('')
@@ -217,7 +256,7 @@ async function openChest() {
 }
 
 /* ---------------- NEW: Adsgram task (2 HTW, 10p, 10 lần/ngày) ---------------- */
-const ads = ref({ reward: 1, cooldown: 600, remaining: 0, today: 0, limit: 10 })
+const ads = ref({ reward: 2, cooldown: 600, remaining: 0, today: 0, limit: 10 })
 const adsBusy = ref(false)
 const adsMsg = ref('')
 let adsTimer = null
@@ -277,7 +316,7 @@ const adsLoading = ref(true)
 // Montag
 const mtgLoading = ref(true)
 
-const mtg = ref({ reward: 1, cooldown: 600, remaining: 0, today: 0, limit: 10 })
+const mtg = ref({ reward: 2, cooldown: 600, remaining: 0, today: 0, limit: 10 })
 const mtgBusy = ref(false)
 const mtgMsg = ref('')
 let mtgTimer = null
