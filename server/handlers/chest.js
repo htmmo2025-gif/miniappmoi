@@ -1,7 +1,7 @@
 // /api/chest.js
 import { supa } from './_supa.js'
 
-const REWARD     = Number(process.env.CHEST_REWARD_HTW    ?? 7)      // HTW / mở rương
+const REWARD     = Number(process.env.CHEST_REWARD_HTW    ?? 5)      // HTW / mở rương
 const COOLDOWN   = Number(process.env.CHEST_COOLDOWN_SEC  ?? 1200)   // 20 phút
 const DAY_LIMIT  = Number(process.env.CHEST_DAILY_LIMIT   ?? 30)     // 30 lần/ngày
 
