@@ -7,7 +7,7 @@ import BottomNav from '../components/BottomNav.vue'
 const raw = String(import.meta.env.VITE_ADSGRAM_BLOCK_ID ?? '').trim()
 // Chuẩn hoá: chấp nhận "12345" hoặc "task-12345" -> luôn render "task-12345"
 const blockId = /^task-\d+$/i.test(raw) ? raw : (/^\d+$/.test(raw) ? `task-${raw}` : '')
-const rewardUi = 4
+const rewardUi = 5
 
 const prof = ref(null)
 const sdkReady = ref(false)
