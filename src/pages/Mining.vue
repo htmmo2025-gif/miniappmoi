@@ -4,12 +4,12 @@ import BottomNav from '../components/BottomNav.vue'
 
 /* ---------------- Mining (hiện có) ---------------- */
 const state = ref({
-  reward: 4,        // HTW/ lần đào
+  reward: 5,        // HTW/ lần đào
   cooldown: 1200,   // 20 phút
   remaining: 0,
   htw_balance: 0,
   today: 0,         // NEW: hôm nay đã claim
-  limit: 30,        // NEW: giới hạn/ngày
+  limit: 10,        // NEW: giới hạn/ngày
 })
 
 const busy = ref(false)
@@ -74,7 +74,7 @@ async function loadStatus() {
       remaining: Number(data.remaining ?? 0),
       htw_balance: Number(data.htw_balance ?? 0),
       today: Number(data.today ?? 0),                // NEW
-      limit: Number(data.daily_limit ?? 30),         // NEW
+      limit: Number(data.daily_limit ?? 10),         // NEW
     }
     if (state.value.remaining > 0) startTicker()
   } catch (e) {
@@ -102,7 +102,7 @@ async function claim() {
       state.value.today = Number(data?.today_count ?? state.value.today) // NEW: cập nhật đếm ngày khi fail
       startTicker()
       msg.value = data?.ok === false
-        ? (state.value.today >= state.value.limit ? 'Hôm nay đã đủ 30 lần.' : 'Chưa hết thời gian chờ.')
+        ? (state.value.today >= state.value.limit ? 'Hôm nay đã đủ 10 lần.' : 'Chưa hết thời gian chờ.')
         : 'Claim thất bại.'
       return
     }
@@ -122,7 +122,7 @@ async function claim() {
 }
 
 /* ---------------- Chest (mở rương) + Monetag ---------------- */
-const chest = ref({ reward: 5, cooldown: 1200, remaining: 0, today: 0, limit: 30 }) // NEW: today/limit
+const chest = ref({ reward: 5, cooldown: 1200, remaining: 0, today: 0, limit: 10 }) // NEW: today/limit
 const chestBusy = ref(false)
 const chestLoading = ref(true)
 const chestMsg = ref('')
