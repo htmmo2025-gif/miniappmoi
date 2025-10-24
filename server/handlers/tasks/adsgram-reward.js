@@ -1,8 +1,8 @@
 // /api/tasks/adsgram-reward.js
 import { supa } from '../_supa.js'
 
-const REWARD = Number(process.env.ADSGRAM_REWARD_HTW || 4)
-const COOLDOWN_SEC = Number(process.env.ADSGRAM_COOLDOWN_SEC || 1200)
+const REWARD = Number(process.env.ADSGRAM_REWARD_HTW || 5)
+const COOLDOWN_SEC = Number(process.env.ADSGRAM_COOLDOWN_SEC || 600)
 
 function getUid(req) {
   const m = (req.headers.cookie || '').match(/(?:^|;\s*)tg_uid=(\d+)/)
