@@ -3,7 +3,7 @@ import { supa } from './_supa.js'
 
 const REWARD     = Number(process.env.CHEST_REWARD_HTW    ?? 5)      // HTW / mở rương
 const COOLDOWN   = Number(process.env.CHEST_COOLDOWN_SEC  ?? 1200)   // 20 phút
-const DAY_LIMIT  = Number(process.env.CHEST_DAILY_LIMIT   ?? 30)     // 30 lần/ngày
+const DAY_LIMIT  = Number(process.env.CHEST_DAILY_LIMIT   ?? 10)     // 30 lần/ngày
 
 function getUidFromCookie(req) {
   const m = (req.headers.cookie || '').match(/(?:^|;\s*)tg_uid=(\d+)/)
