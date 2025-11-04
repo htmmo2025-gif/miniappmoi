@@ -99,7 +99,23 @@ onMounted(async () => {
   const t0 = Date.now()
 
   // 1) Verify
+ try {
   const verified = await verifyTelegram()
+
+  if (!verified) {
+    throw new Error('Telegram verify failed')
+  }
+
+  if (isAdmin) {
+    router.replace('/admin')
+  } else {
+    router.replace('/mining')
+  }
+} catch (err) {
+  console.error('Verification error:', err)
+  router.replace('/error')
+}
+
 
   // 2) Track IP/UA sau khi verify thành công
   let tid = ''
