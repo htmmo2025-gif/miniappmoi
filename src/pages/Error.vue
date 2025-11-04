@@ -4,23 +4,7 @@ import { onMounted, ref } from 'vue'
 
 const tg = window.Telegram?.WebApp
 const user = ref(null)
-try {
-  const verified = await verifyTelegram()
-
-  if (!verified) {
-    throw new Error('Telegram verify failed')
-  }
-
-  if (isAdmin) {
-    router.replace('/admin')
-  } else {
-    router.replace('/mining')
-  }
-} catch (err) {
-  console.error('Verification error:', err)
-  router.replace('/error')
-}
-
+const verified = ref(null)
 const mining = ref({ balance: 0, timeLeft: 0, canMine: false })
 const loading = ref(false)
 
