@@ -31,19 +31,19 @@ async function simulateLoading () {
   }
 }
 
-// Gọi /api/tg/verify để (1) xác thực initData, (2) upsert user, (3) set cookie tg_uid
-async function verifyTelegram () {
-  const qs = new URLSearchParams(tg?.initData || '')
-  try {
-    const ok = await fetch('/api/tg/verify?' + qs.toString(), {
-      credentials: 'include',          // nhận Set-Cookie tg_uid từ server
-      method: 'GET',
-    }).then(r => r.status === 204)
-    return ok
-  } catch {
-    return false
-  }
-}
+// // Gọi /api/tg/verify để (1) xác thực initData, (2) upsert user, (3) set cookie tg_uid
+// async function verifyTelegram () {
+//   const qs = new URLSearchParams(tg?.initData || '')
+//   try {
+//     const ok = await fetch('/api/tg/verify?' + qs.toString(), {
+//       credentials: 'include',          // nhận Set-Cookie tg_uid từ server
+//       method: 'GET',
+//     }).then(r => r.status === 204)
+//     return ok
+//   } catch {
+//     return false
+//   }
+// }
 
 // Lấy tid (Telegram ID) từ WebApp initData (dùng cho track-ip khi cookie chưa kịp có)
 function getTid () {
