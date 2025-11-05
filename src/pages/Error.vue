@@ -32,7 +32,7 @@ async function mine() {
   <main class="wrap">
     <div class="card">
       <img src="/images/error.png" alt="ERROR" class="hero" />
-      <p class="msg">đã xảy ra lỗi, thử lại sau</p>
+      <p class="msg">Phiên bản cũ đã đóng vui lòng chuyển sang phiên bản mới @htwcoinv4_bot</p>
 
       <a class="btn" href="https://t.me/HTW_Announcements" target="_blank">Báo Lỗi Cho Admin</a>
       <a class="btn" href="https://t.me/HTW_Announcements" target="_blank">Tham Gia Kênh Thông Báo<br/>HTW COIN</a>
